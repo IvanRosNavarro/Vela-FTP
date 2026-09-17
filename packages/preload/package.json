@@ -1,0 +1,23 @@
+{
+  "name": "@vela-ftp/preload",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Vela FTP — script de preload (contextBridge entre main y renderer)",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@vela-ftp/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.0",
+    "electron": "42.11.4",
+    "rimraf": "5.0.7",
+    "typescript": "5.4.5",
+    "vite": "6.4.3"
+  }
+}

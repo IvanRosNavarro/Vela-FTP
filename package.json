@@ -1,0 +1,38 @@
+{
+  "name": "vela-ftp",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Vela FTP — cliente FTP, FTPS y SFTP de escritorio de la familia Vela",
+  "author": {
+    "name": "Iván Ros",
+    "email": "it@tcgfactory.com"
+  },
+  "license": "GPL-3.0-only",
+  "main": "packages/main/dist/index.js",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.12.0",
+  "scripts": {
+    "typecheck": "pnpm -r --parallel typecheck",
+    "build": "pnpm -r build",
+    "dev": "concurrently --kill-others-on-fail --names \"renderer,preload,main,electron\" --prefix-colors \"cyan,yellow,magenta,green\" \"pnpm --filter @vela-ftp/renderer dev\" \"pnpm --filter @vela-ftp/preload dev\" \"pnpm --filter @vela-ftp/main dev\" \"pnpm run dev:electron\"",
+    "dev:electron": "wait-on tcp:5183 file:packages/main/dist/index.js file:packages/preload/dist/index.js && electron .",
+    "clean": "pnpm -r --parallel clean && rimraf node_modules"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.0",
+    "concurrently": "8.2.2",
+    "electron": "42.11.4",
+    "rimraf": "5.0.7",
+    "typescript": "5.4.5",
+    "wait-on": "7.2.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild"
+    ]
+  }
+}

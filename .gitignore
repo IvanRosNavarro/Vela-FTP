@@ -1,0 +1,60 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+out/
+release/
+*.tsbuildinfo
+
+# Electron
+app.asar
+*.exe
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+*.snap
+*.zip
+
+# Logs
+logs/
+*.log
+pnpm-debug.log*
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Coverage
+coverage/
+
+# SQLite local
+*.sqlite
+*.db
+*.db-journal
+
+# Cache
+.cache/
+
+# OS
+Desktop.ini
+$RECYCLE.BIN/
+
+# Claude Code — contexto interno del asistente
+.claude/
+
+# Archivos internos — no publicar
+FASE_ACTUAL.md
+CLAUDE.md
+ROADMAP.md

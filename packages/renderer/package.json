@@ -1,0 +1,29 @@
+{
+  "name": "@vela-ftp/renderer",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Vela FTP — UI React (renderer)",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@vela-ftp/shared": "workspace:*",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.3",
+    "@types/react-dom": "18.3.0",
+    "@vitejs/plugin-react": "4.7.0",
+    "autoprefixer": "10.4.19",
+    "postcss": "8.5.28",
+    "rimraf": "5.0.7",
+    "tailwindcss": "3.4.6",
+    "typescript": "5.4.5",
+    "vite": "6.4.3"
+  }
+}
