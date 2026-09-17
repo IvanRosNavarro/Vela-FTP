@@ -16,6 +16,7 @@ export function toErrorResponse(err: unknown, channel: string): AppIpcResponse<n
   if (err instanceof InvalidMasterPasswordError) return fail('INVALID_MASTER_PASSWORD');
   if (err instanceof KeychainUnavailableError) return fail('KEYCHAIN_UNAVAILABLE');
   if (err instanceof NotFoundError) return fail('NOT_FOUND', { entity: err.entity, id: err.id });
+  if (err instanceof Error && err.name === 'InvalidShortcutRequestError') return fail('INVALID_INPUT', { message: err.message });
   const code = (err as { code?: unknown })?.code;
   if (code === 'ENOENT') return fail('NOT_FOUND', { message: (err as Error).message });
   if (code === 'EEXIST') return fail('ALREADY_EXISTS', { message: (err as Error).message });

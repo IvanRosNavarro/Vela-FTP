@@ -1,6 +1,9 @@
 import { useDialogStore } from '../../stores/dialogStore';
 import { useQueueStore } from '../../stores/queueStore';
+import { ImportFileZillaDialog } from './ImportFileZillaDialog';
+import { PaletteHost } from './PaletteHost';
 import { MasterPasswordDialog, HostKeyDialog, UnlockDialog } from './SecurityDialogs';
+import { SettingsDialog } from './SettingsDialog';
 import { ConfirmDialog, PromptDialog } from './SimpleDialogs';
 import { SiteEditor } from './SiteEditor';
 import { ChmodDialog, ConflictDialog } from './TransferDialogs';
@@ -21,7 +24,13 @@ export function DialogHost() {
       case 'prompt':
         return <PromptDialog spec={top} onClose={onClose} />;
       case 'siteEditor':
-        return <SiteEditor site={top.site} onClose={onClose} />;
+        return <SiteEditor site={top.site} projectId={top.projectId ?? null} onClose={onClose} />;
+      case 'settings':
+        return <SettingsDialog {...(top.section ? { section: top.section } : {})} onClose={onClose} />;
+      case 'palette':
+        return <PaletteHost {...(top.initialQuery !== undefined ? { initialQuery: top.initialQuery } : {})} onClose={onClose} />;
+      case 'importFileZilla':
+        return <ImportFileZillaDialog onClose={onClose} />;
       case 'hostKey':
         return <HostKeyDialog spec={top} onClose={onClose} />;
       case 'unlock':

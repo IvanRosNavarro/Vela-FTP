@@ -35,6 +35,7 @@ import type { SecretStore } from '../security/SecretStore';
 import { restoredSessionId } from '../storage/repositories/TransferJobsRepository';
 import type { SessionManager } from '../sessions/SessionManager';
 import type { KnownHostsRepository } from '../storage/repositories/KnownHostsRepository';
+import type { PathHistoryRepository } from '../storage/repositories/ProjectsRepository';
 import type { SitesRepository } from '../storage/repositories/SitesRepository';
 import type { QueueMirror } from '../transfer/QueueMirror';
 import { TransferRequestError, type TransferHost } from '../transfer/TransferHost';
@@ -47,6 +48,7 @@ export interface AppIpcDeps {
   sessions: SessionManager;
   transfer: TransferHost;
   queue: QueueMirror;
+  history: PathHistoryRepository;
 }
 
 async function listLocal(dir: string): Promise<LocalEntry[]> {
@@ -100,7 +102,7 @@ async function localRoots(): Promise<LocalRoot[]> {
 }
 
 export function registerAppHandlers(deps: AppIpcDeps): void {
-  const { sites, knownHosts, secrets, sessions, transfer, queue } = deps;
+  const { sites, knownHosts, secrets, sessions, transfer, queue, history } = deps;
   const sitesChanged = () => broadcast(IPC_EVENTS.SITES_CHANGED, null);
   const vaultChanged = () => broadcast(IPC_EVENTS.VAULT_CHANGED, null);
 
@@ -161,7 +163,12 @@ export function registerAppHandlers(deps: AppIpcDeps): void {
     await sessions.close(sessionId);
     return null;
   });
-  handle(IPC_CHANNELS.REMOTE_LIST, remotePathInputSchema, ({ sessionId, path: p }) => transfer.request('fs.list', { sessionId, path: p }));
+  handle(IPC_CHANNELS.REMOTE_LIST, remotePathInputSchema, async ({ sessionId, path: p }) => {
+    const entries = await transfer.request('fs.list', { sessionId, path: p });
+    const siteId = sessions.get(sessionId)?.siteId;
+    if (siteId) history.record(siteId, p);
+    return entries;
+  });
   handle(IPC_CHANNELS.REMOTE_MKDIR, remotePathInputSchema, ({ sessionId, path: p }) => transfer.request('fs.mkdir', { sessionId, path: p }));
   handle(IPC_CHANNELS.REMOTE_RENAME, remoteRenameInputSchema, (input) => transfer.request('fs.rename', input));
   handle(IPC_CHANNELS.REMOTE_CHMOD, remoteChmodInputSchema, (input) => transfer.request('fs.chmod', input));

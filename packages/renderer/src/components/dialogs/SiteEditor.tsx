@@ -3,6 +3,7 @@ import { DEFAULT_PORTS, siteInputSchema, type AuthMethod, type RemoteProtocol, t
 import { toast } from 'vela-kit/ui';
 import { call, errorText } from '../../lib/ipc';
 import { useSessionsStore } from '../../stores/sessionsStore';
+import { useSitesStore } from '../../stores/sitesStore';
 import { Modal } from './Modal';
 
 const PROTOCOLS: Array<{ value: RemoteProtocol; label: string }> = [
@@ -31,13 +32,14 @@ interface FormState {
   initialLocalPath: string;
   maxConnections: string;
   notes: string;
+  projectId: string;
   /** '' con `hasPassword` = no tocar. */
   password: string;
   passphrase: string;
   clearPassword: boolean;
 }
 
-function fromSite(site: Site | null): FormState {
+function fromSite(site: Site | null, projectId: string | null): FormState {
   return {
     name: site?.name ?? '',
     protocol: site?.protocol ?? 'sftp',
@@ -50,6 +52,7 @@ function fromSite(site: Site | null): FormState {
     initialLocalPath: site?.initialLocalPath ?? '',
     maxConnections: String(site?.maxConnections ?? 2),
     notes: site?.notes ?? '',
+    projectId: site ? (site.projectId ?? '') : (projectId ?? ''),
     password: '',
     passphrase: '',
     clearPassword: false,
@@ -73,13 +76,15 @@ function toInput(form: FormState, site: Site | null): unknown {
     initialLocalPath: form.initialLocalPath || null,
     maxConnections: Number(form.maxConnections),
     notes: form.notes,
+    projectId: form.projectId || null,
     password: form.auth === 'password' ? (form.clearPassword ? null : secret(form.password, site?.hasPassword)) : null,
     passphrase: form.auth === 'key' ? secret(form.passphrase, site?.hasPassphrase) : null,
   } satisfies Record<keyof SiteInput, unknown>;
 }
 
-export function SiteEditor({ site, onClose }: { site: Site | null; onClose: () => void }) {
-  const [form, setForm] = useState(() => fromSite(site));
+export function SiteEditor({ site, projectId = null, onClose }: { site: Site | null; projectId?: string | null; onClose: () => void }) {
+  const projects = useSitesStore((s) => s.projects);
+  const [form, setForm] = useState(() => fromSite(site, projectId));
   const [saving, setSaving] = useState(false);
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -152,6 +157,19 @@ export function SiteEditor({ site, onClose }: { site: Site | null; onClose: () =
           <input className="vf-input" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Producción web" />
           {form.name && field('name')}
         </label>
+        {projects.length > 0 && (
+          <label className="vf-label col-span-6">
+            Proyecto
+            <select className="vf-input" value={form.projectId} onChange={(e) => set('projectId', e.target.value)}>
+              <option value="">Sin proyecto</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="vf-label col-span-6">
           Protocolo
           <select className="vf-input" value={form.protocol} onChange={(e) => changeProtocol(e.target.value as RemoteProtocol)}>

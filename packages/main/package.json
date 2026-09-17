@@ -13,9 +13,10 @@
   },
   "dependencies": {
     "@vela-ftp/shared": "workspace:*",
+    "fast-xml-parser": "5.11.1",
     "fractional-indexing": "3.2.0",
     "uuid": "14.0.2",
-    "vela-kit": "github:IvanRosNavarro/Vela-Kit#v0.3.0",
+    "vela-kit": "github:IvanRosNavarro/Vela-Kit#v0.4.0",
     "zod": "4.4.3"
   },
   "devDependencies": {

@@ -29,6 +29,36 @@ const api: PreloadApi = {
     delete: (id) => invoke(C.SITES_DELETE, { id }),
     duplicate: (id) => invoke(C.SITES_DUPLICATE, { id }),
     move: (id, beforeId, afterId) => invoke(C.SITES_MOVE, { id, beforeId, afterId }),
+    relocate: (id, projectId, beforeId, afterId) => invoke(C.SITES_RELOCATE, { id, projectId, beforeId, afterId }),
+  },
+
+  projects: {
+    list: () => invoke(C.PROJECTS_LIST),
+    create: (input) => invoke(C.PROJECTS_CREATE, input),
+    update: (id, patch) => invoke(C.PROJECTS_UPDATE, { id, ...patch }),
+    delete: (id) => invoke(C.PROJECTS_DELETE, { id }),
+    move: (id, beforeId, afterId) => invoke(C.PROJECTS_MOVE, { id, beforeId, afterId }),
+  },
+
+  bookmarks: {
+    list: () => invoke(C.BOOKMARKS_LIST),
+    create: (input) => invoke(C.BOOKMARKS_CREATE, input),
+    update: (id, patch) => invoke(C.BOOKMARKS_UPDATE, { id, ...patch }),
+    delete: (id) => invoke(C.BOOKMARKS_DELETE, { id }),
+    history: (siteId, limit) => invoke(C.HISTORY_LIST, { siteId, limit }),
+  },
+
+  commands: {
+    list: () => invoke(C.COMMANDS_LIST),
+    execute: (id) => invoke(C.COMMANDS_EXECUTE, { id }),
+    setShortcut: (commandId, combo) => invoke(C.SHORTCUTS_SET, { commandId, combo }),
+    resetShortcuts: () => invoke(C.SHORTCUTS_RESET),
+    suspendShortcuts: (suspended) => invoke(C.SHORTCUTS_SUSPEND, { suspended }),
+  },
+
+  import: {
+    previewFileZilla: (path) => invoke(C.IMPORT_FILEZILLA_PREVIEW, { path }),
+    applyFileZilla: (path, keys) => invoke(C.IMPORT_FILEZILLA_APPLY, { path, keys }),
   },
 
   vault: {
@@ -42,6 +72,8 @@ const api: PreloadApi = {
     open: (siteId) => invoke(C.SESSION_OPEN, { siteId }),
     close: (sessionId) => invoke(C.SESSION_CLOSE, { sessionId }),
     trust: (input) => invoke(C.KNOWN_HOSTS_TRUST, input),
+    knownHosts: () => invoke(C.KNOWN_HOSTS_LIST),
+    forget: (host, port, fingerprint) => invoke(C.KNOWN_HOSTS_REMOVE, { host, port, fingerprint }),
   },
 
   remote: {

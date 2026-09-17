@@ -14,6 +14,8 @@ import { remotePaneKey, usePanesStore } from './stores/panesStore';
 import { useQueueStore } from './stores/queueStore';
 import { useSessionsStore } from './stores/sessionsStore';
 import { useSitesStore } from './stores/sitesStore';
+import { useUiStore } from './stores/uiStore';
+import { runCommandAction } from './lib/commandActions';
 
 async function readSetting<K extends 'ui:bottom-panel-height' | 'ui:sidebar-width' | 'local:last-path'>(key: K) {
   const res = await window.api.settings.get(key);
@@ -57,6 +59,7 @@ function useRefreshAfterTransfers() {
 export function App() {
   const [sidebarWidth, setSidebarWidth] = useState(240);
   const [bottomHeight, setBottomHeight] = useState(220);
+  const bottomVisible = useUiStore((s) => s.bottomPanelVisible);
 
   useRefreshAfterTransfers();
 
@@ -64,6 +67,9 @@ export function App() {
     const queue = useQueueStore.getState();
     const sites = useSitesStore.getState();
     void sites.loadSites();
+    void sites.loadProjects();
+    void sites.loadBookmarks();
+    void sites.loadCommands();
     void sites.loadVault();
     void call(window.api.queue.snapshot()).then(queue.replaceAll).catch(() => undefined);
 
@@ -94,6 +100,9 @@ export function App() {
 
     const offs = [
       window.api.on(IPC_EVENTS.SITES_CHANGED, () => void useSitesStore.getState().loadSites()),
+      window.api.on(IPC_EVENTS.PROJECTS_CHANGED, () => void useSitesStore.getState().loadProjects()),
+      window.api.on(IPC_EVENTS.BOOKMARKS_CHANGED, () => void useSitesStore.getState().loadBookmarks()),
+      window.api.on(IPC_EVENTS.COMMAND_ACTION, ({ action }) => runCommandAction(action)),
       window.api.on(IPC_EVENTS.VAULT_CHANGED, () => void useSitesStore.getState().loadVault()),
       window.api.on(IPC_EVENTS.QUEUE_UPDATED, ({ jobs, removedIds }) => queue.applyUpdate(jobs, removedIds)),
       window.api.on(IPC_EVENTS.QUEUE_CONFLICT, (info) => queue.addConflict(info)),
@@ -130,7 +139,7 @@ export function App() {
         />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <Workspace />
-          <Splitter
+          {bottomVisible && <Splitter
             direction="vertical"
             value={bottomHeight}
             min={80}
@@ -138,8 +147,8 @@ export function App() {
             invert
             onChange={setBottomHeight}
             onCommit={(v) => saveSetting('ui:bottom-panel-height', v)}
-          />
-          <BottomPanel height={bottomHeight} />
+          />}
+          {bottomVisible && <BottomPanel height={bottomHeight} />}
         </div>
       </div>
       <DialogHost />
