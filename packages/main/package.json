@@ -9,10 +9,12 @@
     "dev": "vite build --watch",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf dist *.tsbuildinfo",
-    "test": "vitest run"
+    "test": "node ../../scripts/electron-node.mjs node_modules/vitest/vitest.mjs run"
   },
   "dependencies": {
     "@vela-ftp/shared": "workspace:*",
+    "fractional-indexing": "3.2.0",
+    "uuid": "14.0.2",
     "vela-kit": "github:IvanRosNavarro/Vela-Kit#v0.3.0",
     "zod": "4.4.3"
   },

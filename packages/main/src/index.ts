@@ -7,9 +7,19 @@ import { DEV_SERVER_ORIGIN } from './ipc/guard';
 import { registerSettingsHandlers } from './ipc/settings';
 import { registerWindowHandlers } from './ipc/window';
 import { applyDevCsp, registerAppProtocol, registerAppSchemeAsPrivileged } from './protocol/appProtocol';
+import { registerAppHandlers } from './ipc/app';
+import { osKeychain } from './security/keychain';
+import { SecretStore } from './security/SecretStore';
+import { SessionManager } from './sessions/SessionManager';
 import { closeStorage, initStorage } from './storage/db';
+import { KnownHostsRepository } from './storage/repositories/KnownHostsRepository';
 import { SettingsRepository } from './storage/repositories/SettingsRepository';
+import { SitesRepository } from './storage/repositories/SitesRepository';
+import { QueueMirror } from './transfer/QueueMirror';
+import { TransferHost } from './transfer/TransferHost';
 import { createMainWindow } from './window/mainWindow';
+
+let transfer: TransferHost | null = null;
 
 app.setName('Vela FTP');
 app.setAppUserModelId('com.vela.ftp');
@@ -58,8 +68,24 @@ if (!app.requestSingleInstanceLock()) {
     }
     setApplicationMenu();
 
+    const secrets = new SecretStore(db, osKeychain);
+    try {
+      secrets.initialize();
+    } catch (err) {
+      // p. ej. el llavero del SO cambió de usuario: los secretos no se pueden leer.
+      logger.error('[secrets] no se pudo abrir el almacén de secretos', err);
+    }
+    const sites = new SitesRepository(db, secrets);
+    const knownHosts = new KnownHostsRepository(db);
+
+    transfer = new TransferHost();
+    transfer.start();
+    const queue = new QueueMirror(transfer);
+    const sessions = new SessionManager(transfer, sites, knownHosts);
+
     registerSettingsHandlers(settings);
     registerWindowHandlers();
+    registerAppHandlers({ sites, knownHosts, secrets, sessions, transfer, queue });
 
     const registry = buildCommandRegistry();
     const shortcuts = new ShortcutTable({ reserved: ['Ctrl+Shift+P'] });
@@ -86,6 +112,7 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.on('will-quit', () => {
+    transfer?.stop();
     closeStorage();
   });
 }

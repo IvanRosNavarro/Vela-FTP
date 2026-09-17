@@ -404,14 +404,15 @@ export class TransferQueue {
     } else {
       const walk = async (localDir: string, remoteDir: string): Promise<void> => {
         if (signal.aborted) throw new TransferFailure('CANCELLED', 'Cancelado');
-        const existing = await fs.stat(remoteDir);
-        if (!existing) await fs.mkdir(remoteDir);
+        // Leer primero la carpeta local: si no existe, no se crea nada en el servidor.
         let entries;
         try {
           entries = await readdir(localDir, { withFileTypes: true });
         } catch (err) {
           throw localFailure(err, localDir);
         }
+        const existing = await fs.stat(remoteDir);
+        if (!existing) await fs.mkdir(remoteDir);
         for (const entry of entries) {
           const localPath = path.join(localDir, entry.name);
           const remotePath = joinRemote(remoteDir, entry.name);

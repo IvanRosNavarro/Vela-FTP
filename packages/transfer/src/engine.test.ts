@@ -109,6 +109,14 @@ describe('TransferEngine', () => {
     expect(await readFile(path.join(local, 'tree-copia', 'raiz.txt'), 'utf8')).toBe('r');
   });
 
+  it('una carpeta local inexistente no deja rastro en el servidor', async () => {
+    const ghost = job({ direction: 'upload', localPath: path.join(local, 'no-existe'), remotePath: '/fantasma', isDirectory: true });
+    h.engine.queue.enqueue([ghost]);
+    await h.waitFor(finished(ghost.id));
+    expect(h.jobs.get(ghost.id)).toMatchObject({ status: 'failed', error: { code: 'NOT_FOUND' } });
+    expect(await h.engine.call('fs.list', { sessionId: 's1', path: '/' }).then((l) => l.some((e) => e.name === 'fantasma'))).toBe(false);
+  });
+
   it('aplica las políticas de conflicto', async () => {
     await writeFile(path.join(root, 'c.txt'), 'remoto nuevo');
     const target = path.join(local, 'c.txt');

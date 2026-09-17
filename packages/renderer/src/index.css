@@ -10,9 +10,49 @@ body,
   color: var(--vela-fg);
   font-family: var(--vela-font-family);
   font-size: var(--vela-font-size);
+  overflow: hidden;
 }
 
 html {
   /* vela-kit pone --vela-html-bg a transparent con el glassmorphism activo. */
   background: var(--vela-html-bg, var(--vela-bg));
+}
+
+@layer components {
+  .vf-btn {
+    @apply inline-flex items-center gap-1.5 rounded-md border border-[var(--vela-border)] bg-[var(--vela-bg-elevated)] px-3 py-1.5 text-xs text-[var(--vela-fg)] transition-colors hover:border-[var(--vela-accent)] disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .vf-btn-primary {
+    @apply vf-btn border-transparent bg-[var(--vela-accent)] text-[var(--vela-accent-fg)] hover:brightness-110;
+  }
+  .vf-btn-danger {
+    @apply vf-btn border-transparent bg-[var(--vela-danger)] text-[#1b1d24] hover:brightness-110;
+  }
+  .vf-icon-btn {
+    @apply inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--vela-fg-muted)] transition-colors hover:bg-[var(--vela-sidebar-hover-bg)] hover:text-[var(--vela-fg)] disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .vf-input {
+    @apply w-full rounded-md border border-[var(--vela-border)] bg-[var(--vela-bg)] px-2 py-1.5 text-xs text-[var(--vela-fg)] outline-none focus:border-[var(--vela-accent)];
+  }
+  .vf-label {
+    @apply flex flex-col gap-1 text-[11px] text-[var(--vela-fg-muted)];
+  }
+  .vf-panel-title {
+    @apply text-[10px] font-semibold uppercase tracking-wider text-[var(--vela-fg-muted)];
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--vela-border);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vela-fg-muted);
+  background-clip: padding-box;
 }
