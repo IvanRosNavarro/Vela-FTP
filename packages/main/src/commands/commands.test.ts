@@ -1,9 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
+
+// Los tests corren en el Node de Electron, sin `app` ni ventanas de verdad.
+vi.mock('electron', () => ({
+  app: { isPackaged: false },
+  BrowserWindow: { fromId: () => null, getFocusedWindow: () => null },
+}));
 import type { CommandCategory } from '@vela-ftp/shared';
 import { CommandRegistry } from 'vela-kit/commands';
 import { createTestDb } from '../test/createTestDb';
 import { SettingsRepository } from '../storage/repositories/SettingsRepository';
-import { PALETTE_SHORTCUT, ShortcutManager, defineCommand, type CommandContext } from './index';
+import { PALETTE_SHORTCUT, ShortcutManager, buildCommandRegistry, defineCommand, type CommandContext } from './index';
 
 function setup() {
   const registry = new CommandRegistry<CommandContext, CommandCategory>();
@@ -61,5 +67,16 @@ describe('ShortcutManager', () => {
     expect(newSite).toHaveBeenCalledOnce();
     await manager.current.match(key('KeyP', { control: true, shift: true }))?.invoke(1);
     expect(palette).toHaveBeenCalledOnce();
+  });
+});
+
+describe('registro de comandos', () => {
+  it('abre otra ventana con el comando de ventana nueva', () => {
+    const openWindow = vi.fn();
+    const registry = buildCommandRegistry(openWindow);
+    const command = registry.list().find((c) => c.id === 'window.new');
+    expect(command?.defaultShortcut).toBe('Ctrl+Shift+N');
+    registry.execute('window.new', { windowId: null });
+    expect(openWindow).toHaveBeenCalledTimes(1);
   });
 });

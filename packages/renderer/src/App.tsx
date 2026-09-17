@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { IPC_EVENTS, type JobSnapshot, type SettingKey, type UpdateStatus } from '@vela-ftp/shared';
 import { toast } from 'vela-kit/ui';
 import { AppTitleBar } from './components/AppTitleBar';
@@ -10,7 +10,7 @@ import { Splitter } from './components/Splitter';
 import { Workspace } from './components/Workspace';
 import { call, describeError } from './lib/ipc';
 import { localPaths, remotePaths } from './lib/paths';
-import { remotePaneKey, usePanesStore } from './stores/panesStore';
+import { localPaneKey, remotePaneKey, usePanesStore } from './stores/panesStore';
 import { useQueueStore } from './stores/queueStore';
 import { useSessionsStore } from './stores/sessionsStore';
 import { useSitesStore } from './stores/sitesStore';
@@ -22,7 +22,7 @@ import { useWatchStore } from './stores/watchStore';
 import { useSyncStore } from './stores/syncStore';
 import { useDialogStore } from './stores/dialogStore';
 
-async function readSetting<K extends 'ui:bottom-panel-height' | 'ui:sidebar-width' | 'local:last-path'>(key: K) {
+async function readSetting<K extends 'ui:bottom-panel-height' | 'ui:sidebar-width' | 'ui:sidebar-collapsed' | 'local:last-path'>(key: K) {
   const res = await window.api.settings.get(key);
   return res.ok ? res.data : null;
 }
@@ -63,10 +63,18 @@ function useRefreshAfterTransfers() {
 
 export function App() {
   const [sidebarWidth, setSidebarWidth] = useState(240);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [bottomHeight, setBottomHeight] = useState(220);
   const bottomVisible = useUiStore((s) => s.bottomPanelVisible);
 
   useRefreshAfterTransfers();
+
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((collapsed) => {
+      void window.api.settings.set('ui:sidebar-collapsed', !collapsed);
+      return !collapsed;
+    });
+  }, []);
 
   useEffect(() => {
     const queue = useQueueStore.getState();
@@ -95,13 +103,15 @@ export function App() {
     })();
 
     void (async () => {
-      const [width, height, lastLocal] = await Promise.all([
+      const [width, height, lastLocal, collapsed] = await Promise.all([
         readSetting('ui:sidebar-width'),
         readSetting('ui:bottom-panel-height'),
         readSetting('local:last-path'),
+        readSetting('ui:sidebar-collapsed'),
       ]);
       if (width) setSidebarWidth(width);
       if (height) setBottomHeight(height);
+      if (collapsed) setSidebarCollapsed(true);
       const home = await call(window.api.local.home());
       const start = lastLocal && lastLocal !== '~' ? lastLocal : home;
       const panes = usePanesStore.getState();
@@ -109,13 +119,14 @@ export function App() {
       if (!(await panes.navigate('local', start))) await panes.navigate('local', home);
     })();
 
-    // La última carpeta local se recuerda entre sesiones.
+    // La última carpeta local se recuerda entre arranques: la del panel que se
+    // esté viendo, que con varias pestañas no tiene por qué ser el mismo.
     let lastSaved = '';
     const unsubscribePanes = usePanesStore.subscribe((state) => {
-      const path = state.panes.local?.path;
-      if (path && path !== lastSaved && !state.panes.local?.error) {
-        lastSaved = path;
-        saveSetting('local:last-path', path);
+      const pane = state.panes[localPaneKey(useSessionsStore.getState().activeId)];
+      if (pane?.path && pane.path !== lastSaved && !pane.error) {
+        lastSaved = pane.path;
+        saveSetting('local:last-path', pane.path);
       }
     });
 
@@ -167,15 +178,20 @@ export function App() {
     <div id="vela-shell" className="flex h-full flex-col">
       <AppTitleBar />
       <div className="flex min-h-0 flex-1">
-        <SitesSidebar width={sidebarWidth} />
-        <Splitter
-          direction="horizontal"
-          value={sidebarWidth}
-          min={160}
-          max={480}
-          onChange={setSidebarWidth}
-          onCommit={(v) => saveSetting('ui:sidebar-width', v)}
-        />
+        <SitesSidebar width={sidebarWidth} collapsed={sidebarCollapsed} onToggleCollapsed={toggleSidebar} />
+        {/* Reducida a iconos tiene un ancho fijo: no hay nada que redimensionar. */}
+        {sidebarCollapsed ? (
+          <div className="w-px shrink-0 bg-[var(--vela-border)]" />
+        ) : (
+          <Splitter
+            direction="horizontal"
+            value={sidebarWidth}
+            min={160}
+            max={480}
+            onChange={setSidebarWidth}
+            onCommit={(v) => saveSetting('ui:sidebar-width', v)}
+          />
+        )}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <Workspace />
           {bottomVisible && <Splitter

@@ -33,7 +33,7 @@ import { isValidName, localPaths, remotePaths, type PathOps } from '../../lib/pa
 import { downloadEntries, uploadDroppedFiles, uploadEntries } from '../../lib/transfers';
 import { writeClipboardText } from '../../lib/clipboard';
 import { confirmDialog, promptDialog, useDialogStore } from '../../stores/dialogStore';
-import { remotePaneKey, sortEntries, usePanesStore, type PaneKey, type SortKey } from '../../stores/panesStore';
+import { isRemotePane, localPaneKey, remotePaneKey, sessionOfPane, sortEntries, usePanesStore, type PaneKey, type SortKey } from '../../stores/panesStore';
 import { useSessionsStore } from '../../stores/sessionsStore';
 import { useSitesStore } from '../../stores/sitesStore';
 import { startWatch } from '../../stores/watchStore';
@@ -131,7 +131,7 @@ function Row({ index, style, ariaAttributes, entries, compare, selected, isRemot
 }
 
 export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null }: FilePaneProps) {
-  const isRemote = paneKey !== 'local';
+  const isRemote = isRemotePane(paneKey);
   const pane = usePanesStore((s) => s.panes[paneKey]);
   const store = usePanesStore.getState;
   const ops: PathOps = isRemote ? remotePaths : localPaths(window.api.local.separator);
@@ -141,7 +141,6 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [dragOverPane, setDragOverPane] = useState(false);
   const showMenu = useContextMenu((s) => s.show);
-  const activeSession = useSessionsStore((s) => s.sessions.find((x) => x.sessionId === s.activeId) ?? null);
   const paneSiteId = useSessionsStore((s) => (sessionId ? s.sessions.find((x) => x.sessionId === sessionId)?.siteId : undefined));
   const isBookmarked = useSitesStore((s) => !!pane && !!paneSiteId && s.bookmarks.some((b) => b.siteId === paneSiteId && b.remotePath === pane.path));
 
@@ -166,23 +165,25 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
     if (parent) navigate(parent);
   };
 
-  /** Panel del otro lado, destino de las transferencias. */
+  /** El panel de enfrente en esta misma pestaña, destino de las transferencias. */
   const otherPane = () => {
-    if (isRemote) return store().panes.local ?? null;
-    return activeSession ? (store().panes[remotePaneKey(activeSession.sessionId)] ?? null) : null;
+    const paneSession = sessionOfPane(paneKey);
+    if (!paneSession) return null;
+    return store().panes[isRemote ? localPaneKey(paneSession) : remotePaneKey(paneSession)] ?? null;
   };
 
   const transfer = async (items: RemoteEntry[], targetDir?: string) => {
     const other = otherPane();
+    const paneSession = sessionOfPane(paneKey);
     if (isRemote) {
-      if (!sessionId || !other) return;
-      await downloadEntries(sessionId, items, targetDir ?? other.path);
+      if (!paneSession || !other) return;
+      await downloadEntries(paneSession, items, targetDir ?? other.path);
     } else {
-      if (!activeSession || !other) {
+      if (!paneSession || !other) {
         toast('Conéctate a un sitio para subir ficheros', 'warning');
         return;
       }
-      await uploadEntries(activeSession.sessionId, items, targetDir ?? other.path);
+      await uploadEntries(paneSession, items, targetDir ?? other.path);
     }
   };
 
@@ -191,7 +192,7 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
       navigate(entry.path);
       return;
     }
-    if (isRemote || activeSession) {
+    if (isRemote || sessionOfPane(paneKey)) {
       void transfer([entry]);
       return;
     }
@@ -214,16 +215,20 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
   /** El fichero con el mismo nombre en la carpeta del otro panel, si existe. */
   const counterpart = (entry: RemoteEntry): { sessionId: string; remotePath: string; localPath: string } | null => {
     const other = otherPane();
+    const paneSession = sessionOfPane(paneKey);
     const match = other?.entries.find((x) => x.name === entry.name && x.type !== 'dir');
-    if (!match || entry.type === 'dir') return null;
-    if (isRemote) return sessionId ? { sessionId, remotePath: entry.path, localPath: match.path } : null;
-    return activeSession ? { sessionId: activeSession.sessionId, remotePath: match.path, localPath: entry.path } : null;
+    if (!match || entry.type === 'dir' || !paneSession) return null;
+    return isRemote
+      ? { sessionId: paneSession, remotePath: entry.path, localPath: match.path }
+      : { sessionId: paneSession, remotePath: match.path, localPath: entry.path };
   };
 
   /** Vigilar una carpeta local y subir sus cambios a la carpeta equivalente del panel remoto activo. */
   const watchFolder = (localDir: string, remoteDir: string) => {
-    if (!activeSession) return;
-    void startWatch(activeSession.sessionId, activeSession.siteName, localDir, remoteDir);
+    const paneSession = sessionOfPane(paneKey);
+    const session = useSessionsStore.getState().sessions.find((s) => s.sessionId === paneSession);
+    if (!session) return;
+    void startWatch(session.sessionId, session.siteName, localDir, remoteDir);
   };
 
   const diff = (entry: RemoteEntry) => {
@@ -317,7 +322,7 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
     const items = selectedSet.has(entry.path) ? selectedEntries() : [entry];
     if (!selectedSet.has(entry.path)) select([entry.path], entry.path);
     const single = items.length === 1 ? items[0]! : null;
-    const canTransfer = isRemote ? true : activeSession !== null;
+    const canTransfer = sessionOfPane(paneKey) !== null;
     const menu: MenuItem[] = [
       ...(single?.type === 'dir' ? [{ label: 'Abrir', icon: <FolderInput size={13} />, shortcut: 'Intro', onSelect: () => navigate(single.path) }] : []),
       {
@@ -338,7 +343,7 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
             },
           ]
         : []),
-      ...(!isRemote && single?.type === 'dir' && activeSession
+      ...(!isRemote && single?.type === 'dir' && sessionOfPane(paneKey)
         ? [
             {
               label: `Vigilar y subir cambios a ${remotePaths.join(otherPane()?.path ?? '/', single.name)}`,
@@ -379,7 +384,7 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
       { label: 'Nueva carpeta', icon: <FolderPlus size={13} />, onSelect: () => void mkdir() },
       { label: 'Refrescar', icon: <RefreshCw size={13} />, shortcut: 'F5', onSelect: refresh },
       { label: pane.showHidden ? 'Ocultar ficheros ocultos' : 'Mostrar ficheros ocultos', icon: pane.showHidden ? <EyeOff size={13} /> : <Eye size={13} />, onSelect: () => store().toggleHidden(paneKey) },
-      ...(!isRemote && activeSession && otherPane()
+      ...(!isRemote && sessionOfPane(paneKey) && otherPane()
         ? [
             {
               label: `Vigilar esta carpeta y subir cambios a ${otherPane()!.path}`,
@@ -420,8 +425,9 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
       const source = store().panes[payload.paneKey];
       if (!source) return;
       const items = source.entries.filter((x) => payload.paths.includes(x.path));
+      const sourceSession = sessionOfPane(payload.paneKey);
       if (isRemote && sessionId) await uploadEntries(sessionId, items, targetDir);
-      if (!isRemote && payload.paneKey !== 'local') await downloadEntries(payload.paneKey.slice('remote:'.length), items, targetDir);
+      if (!isRemote && isRemotePane(payload.paneKey) && sourceSession) await downloadEntries(sourceSession, items, targetDir);
       return;
     }
     if (isRemote && sessionId && e.dataTransfer.files.length > 0) {
@@ -560,7 +566,7 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
             ))}
           </select>
         )}
-        <PathInput paneKey={paneKey} path={pane.path} siteId={isRemote ? (paneSiteId ?? null) : (activeSession?.siteId ?? null)} onNavigate={navigate} />
+        <PathInput paneKey={paneKey} path={pane.path} siteId={paneSiteId ?? null} onNavigate={navigate} />
         {isRemote && sessionId && paneSiteId && (
           <button
             className={`vf-icon-btn ${isBookmarked ? 'text-[var(--vela-accent)]' : ''}`}

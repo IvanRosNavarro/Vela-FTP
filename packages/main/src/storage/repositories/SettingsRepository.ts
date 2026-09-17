@@ -86,6 +86,8 @@ export class SettingsRepository {
 const LOCAL_ONLY_SETTINGS = new Set<string>([
   'local:last-path',
   'ui:sidebar-width',
+  'ui:sidebar-collapsed',
+  'ui:panes-ratio',
   'ui:bottom-panel-height',
   'updates:auto-check',
   'app:welcomed',

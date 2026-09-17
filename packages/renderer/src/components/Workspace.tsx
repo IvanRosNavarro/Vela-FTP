@@ -1,13 +1,18 @@
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GitCompareArrows, Link2, Plug, Plus, Unplug, X } from 'lucide-react';
 import { compareListings, type CompareStatus } from '../lib/compare';
 import { toggleSyncBrowsing, useSyncBrowsing } from '../lib/syncBrowsing';
 import { useDialogStore } from '../stores/dialogStore';
-import { remotePaneKey, usePanesStore } from '../stores/panesStore';
+import { localPaneKey, remotePaneKey, usePanesStore } from '../stores/panesStore';
 import { useSessionsStore } from '../stores/sessionsStore';
 import { useSitesStore } from '../stores/sitesStore';
 import { useUiStore } from '../stores/uiStore';
 import { COMPARE_COLORS, FilePane } from './panes/FilePane';
+import { call } from '../lib/ipc';
+
+/** Límites del reparto: ningún panel puede quedarse sin sitio. */
+const MIN_RATIO = 0.15;
+const MAX_RATIO = 0.85;
 
 function RemotePlaceholder() {
   const sites = useSitesStore((s) => s.sites);
@@ -60,10 +65,25 @@ export function Workspace() {
   const compareMode = useUiStore((s) => s.compareMode);
   const toggleCompare = useUiStore((s) => s.toggleCompare);
   const syncBrowsing = useUiStore((s) => s.syncBrowsing);
-  const localEntries = usePanesStore((s) => s.panes.local?.entries);
+  const localEntries = usePanesStore((s) => s.panes[localPaneKey(activeId)]?.entries);
   const remoteEntries = usePanesStore((s) => (activeId ? s.panes[remotePaneKey(activeId)]?.entries : undefined));
 
   useSyncBrowsing();
+
+  // Reparto entre el panel local y el remoto, en proporción: al cambiar el
+  // tamaño de la ventana cada uno conserva su parte.
+  const [ratio, setRatio] = useState(0.5);
+  const panesRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    void call(window.api.settings.get('ui:panes-ratio')).then(setRatio).catch(() => undefined);
+  }, []);
+  const dragRatio = useCallback((clientX: number) => {
+    const rect = panesRef.current?.getBoundingClientRect();
+    if (!rect || rect.width === 0) return;
+    setRatio(Math.min(MAX_RATIO, Math.max(MIN_RATIO, (clientX - rect.left) / rect.width)));
+  }, []);
+
+  const dragging = useRef(false);
 
   const comparison = useMemo(
     () => (compareMode && localEntries && remoteEntries ? compareListings(localEntries, remoteEntries) : null),
@@ -121,9 +141,58 @@ export function Workspace() {
         </div>
       )}
       {comparison && <CompareLegend />}
-      <div className="flex min-h-0 flex-1">
-        <FilePane paneKey="local" sessionId={activeId} focused={focused === 'local'} onFocus={() => setFocused('local')} compare={comparison?.local ?? null} />
-        <div className="w-px shrink-0 bg-[var(--vela-border)]" />
+      <div ref={panesRef} className="flex min-h-0 flex-1">
+        <div className="flex min-h-0 min-w-0" style={{ flex: `0 0 ${ratio * 100}%` }}>
+          {sessions.length === 0 ? (
+            <FilePane paneKey="local" sessionId={null} focused={focused === 'local'} onFocus={() => setFocused('local')} compare={null} />
+          ) : (
+            // Como en FileZilla, cada pestaña recuerda su propia carpeta local.
+            sessions.map((session) => (
+              <div key={session.sessionId} className={session.sessionId === activeId ? 'flex min-h-0 min-w-0 flex-1' : 'hidden'}>
+                <FilePane
+                  paneKey={localPaneKey(session.sessionId)}
+                  sessionId={session.sessionId}
+                  focused={focused === 'local'}
+                  onFocus={() => setFocused('local')}
+                  compare={session.sessionId === activeId ? (comparison?.local ?? null) : null}
+                />
+              </div>
+            ))
+          )}
+        </div>
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Repartir el espacio entre los paneles"
+          aria-valuenow={Math.round(ratio * 100)}
+          tabIndex={0}
+          className="w-1 shrink-0 cursor-col-resize bg-[var(--vela-border)] transition-colors hover:bg-[var(--vela-accent)]"
+          onPointerDown={(e) => {
+            e.currentTarget.setPointerCapture(e.pointerId);
+            dragging.current = true;
+          }}
+          onPointerMove={(e) => {
+            if (dragging.current) dragRatio(e.clientX);
+          }}
+          onPointerUp={() => {
+            if (!dragging.current) return;
+            dragging.current = false;
+            void window.api.settings.set('ui:panes-ratio', ratio);
+          }}
+          onDoubleClick={() => {
+            setRatio(0.5);
+            void window.api.settings.set('ui:panes-ratio', 0.5);
+          }}
+          onKeyDown={(e) => {
+            const step = e.key === 'ArrowLeft' ? -0.02 : e.key === 'ArrowRight' ? 0.02 : 0;
+            if (step === 0) return;
+            e.preventDefault();
+            const next = Math.min(MAX_RATIO, Math.max(MIN_RATIO, ratio + step));
+            setRatio(next);
+            void window.api.settings.set('ui:panes-ratio', next);
+          }}
+          title="Arrastra para repartir el espacio · doble clic para igualarlos"
+        />
         {sessions.map((session) => (
           // Cada sesión conserva su panel montado para no perder selección ni scroll.
           <div key={session.sessionId} className={session.sessionId === activeId ? 'flex min-h-0 min-w-0 flex-1' : 'hidden'}>

@@ -7,14 +7,14 @@ import {
   FileInput,
   FolderPlus,
   KeyRound,
-  Loader2,
   Lock,
   LockOpen,
+  PanelLeftClose,
+  PanelLeftOpen,
   Palette,
   Pencil,
   Plug,
   Plus,
-  Server,
   Settings,
   Settings2,
   Trash2,
@@ -27,8 +27,7 @@ import { confirmDialog, promptDialog, useDialogStore } from '../stores/dialogSto
 import { useSessionsStore } from '../stores/sessionsStore';
 import { useSitesStore } from '../stores/sitesStore';
 import { useContextMenu, type MenuItem } from './ContextMenu';
-
-const PROTOCOL_LABEL: Record<Site['protocol'], string> = { sftp: 'SFTP', ftps: 'FTPS', 'ftps-implicit': 'FTPS', ftp: 'FTP' };
+import { PROTOCOL_LABEL, SiteIcon } from './SiteIcon';
 
 export const PROJECT_COLORS: Array<{ value: string; label: string }> = [
   { value: '#46b5a0', label: 'Verde azulado' },
@@ -96,7 +95,16 @@ function TreeRow({
   );
 }
 
-export function SitesSidebar({ width }: { width: number }) {
+/** Ancho de la franja de iconos. */
+export const COLLAPSED_SIDEBAR_WIDTH = 44;
+
+export interface SitesSidebarProps {
+  width: number;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+}
+
+export function SitesSidebar({ width, collapsed, onToggleCollapsed }: SitesSidebarProps) {
   const sites = useSitesStore((s) => s.sites);
   const projects = useSitesStore((s) => s.projects);
   const bookmarks = useSitesStore((s) => s.bookmarks);
@@ -257,11 +265,7 @@ export function SitesSidebar({ width }: { width: number }) {
             showMenu(e.clientX, e.clientY, siteMenu(site));
           }}
         >
-          {connecting === site.id ? (
-            <Loader2 size={14} className="shrink-0 animate-spin text-[var(--vela-accent)]" />
-          ) : (
-            <Server size={14} className={`shrink-0 ${connected ? 'text-[var(--vela-success)]' : 'text-[var(--vela-fg-muted)]'}`} />
-          )}
+          <SiteIcon protocol={site.protocol} connected={connected} connecting={connecting === site.id} />
           <span className="min-w-0 flex-1">
             <span className="block truncate">{site.name}</span>
             <span className="block truncate text-[10px] text-[var(--vela-fg-muted)]">{site.host}</span>
@@ -310,11 +314,79 @@ export function SitesSidebar({ width }: { width: number }) {
 
   const hasProjects = projects.length > 0;
 
+  if (collapsed) {
+    return (
+      <aside
+        id="vela-sidebar"
+        style={{ width: COLLAPSED_SIDEBAR_WIDTH }}
+        className="flex shrink-0 flex-col items-center bg-[var(--vela-sidebar-bg)] text-[var(--vela-sidebar-fg)]"
+      >
+        <button className="vf-icon-btn mt-2" title="Mostrar los sitios" aria-label="Mostrar los sitios" onClick={onToggleCollapsed}>
+          <PanelLeftOpen size={16} />
+        </button>
+
+        <div role="tree" aria-label="Sitios" className="vela-scroll flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto py-2">
+          {groups.map(({ project, sites: groupSites }) => {
+            if (groupSites.length === 0) return null;
+            return (
+              <div
+                key={project?.id ?? '__none'}
+                role="group"
+                className="flex flex-col items-center gap-0.5 border-l-2 pl-0.5"
+                style={{ borderColor: project?.color ?? 'transparent' }}
+                title={project?.name ?? 'Sin proyecto'}
+              >
+                {groupSites.map((site) => (
+                  <button
+                    key={site.id}
+                    role="treeitem"
+                    aria-label={site.name}
+                    aria-current={activeSiteId === site.id}
+                    className={`flex h-8 w-8 items-center justify-center rounded-md hover:bg-[var(--vela-sidebar-hover-bg)] ${
+                      activeSiteId === site.id ? 'bg-[var(--vela-sidebar-active-bg)]' : ''
+                    }`}
+                    title={`${site.name}\n${site.host}:${site.port} · ${PROTOCOL_LABEL[site.protocol]}${project ? `\nProyecto: ${project.name}` : ''}`}
+                    onClick={() => void connect(site.id)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      showMenu(e.clientX, e.clientY, siteMenu(site));
+                    }}
+                  >
+                    <SiteIcon protocol={site.protocol} connected={sessions.some((s) => s.siteId === site.id)} connecting={connecting === site.id} size={16} />
+                  </button>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex flex-col items-center gap-1 border-t border-[var(--vela-border)] py-2">
+          <button className="vf-icon-btn" title="Nuevo sitio (Ctrl+N)" onClick={() => openDialog({ kind: 'siteEditor', site: null })}>
+            <Plus size={15} />
+          </button>
+          <button
+            className="vf-icon-btn"
+            title={vault?.mode === 'master-password' ? (vault.locked ? 'Contraseñas bloqueadas' : 'Bloquear contraseñas') : 'Contraseñas guardadas'}
+            onClick={() => void lockToggle()}
+          >
+            {vault?.mode === 'master-password' ? vault.locked ? <Lock size={15} /> : <LockOpen size={15} /> : <KeyRound size={15} />}
+          </button>
+          <button className="vf-icon-btn" title="Ajustes (Ctrl+,)" onClick={() => openDialog({ kind: 'settings' })}>
+            <Settings size={15} />
+          </button>
+        </div>
+      </aside>
+    );
+  }
+
   return (
     <aside id="vela-sidebar" style={{ width }} className="flex shrink-0 flex-col bg-[var(--vela-sidebar-bg)] text-[var(--vela-sidebar-fg)]">
       <div className="flex items-center justify-between px-3 pb-1 pt-3">
         <span className="vf-panel-title">Sitios</span>
         <span className="flex">
+          <button className="vf-icon-btn" title="Reducir a iconos" aria-label="Reducir a iconos" onClick={onToggleCollapsed}>
+            <PanelLeftClose size={15} />
+          </button>
           <button className="vf-icon-btn" title="Nuevo proyecto" onClick={() => void createProject()}>
             <FolderPlus size={15} />
           </button>
@@ -324,7 +396,7 @@ export function SitesSidebar({ width }: { width: number }) {
         </span>
       </div>
 
-      <div role="tree" aria-label="Proyectos y sitios" className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
+      <div role="tree" aria-label="Proyectos y sitios" className="vela-scroll min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
         {sites.length === 0 && !hasProjects && (
           <div className="flex flex-col items-center gap-3 px-2 py-6 text-center text-xs text-[var(--vela-fg-muted)]">
             Aún no hay sitios.
