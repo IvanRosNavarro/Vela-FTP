@@ -50,24 +50,46 @@ jobs:
       - name: Build bundles
         run: pnpm build
 
-      - name: Package & Publish (Linux)
+      - name: Empaquetar (Linux)
         if: matrix.os == 'ubuntu-latest'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPO: ${{ github.repository }}
-        run: pnpm exec electron-builder --config electron-builder.config.cjs --linux --publish always
+        run: pnpm exec electron-builder --config electron-builder.config.cjs --linux --publish never
 
-      - name: Package & Publish (Windows)
+      - name: Empaquetar (Windows)
         if: matrix.os == 'windows-latest'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPO: ${{ github.repository }}
-        run: pnpm exec electron-builder --config electron-builder.config.cjs --win --publish always
+        run: pnpm exec electron-builder --config electron-builder.config.cjs --win --publish never
 
-      - name: Package & Publish (macOS, sin firma)
+      - name: Empaquetar (macOS, sin firma)
         if: matrix.os == 'macos-latest'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPO: ${{ github.repository }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: pnpm exec electron-builder --config electron-builder.config.cjs --mac --publish always
+        run: pnpm exec electron-builder --config electron-builder.config.cjs --mac --publish never
+
+      # electron-builder no reintenta una subida fallida y se niega a publicar en
+      # una release creada hace más de dos horas; gh sí reintenta y no mira la fecha.
+      - name: Subir los instalables a la release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          shopt -s nullglob
+          files=(release/*/*.exe release/*/*.blockmap release/*/*.dmg release/*/*.AppImage release/*/*.deb release/*/latest*.yml)
+          if [ ${#files[@]} -eq 0 ]; then echo "::error::no hay instalables que subir"; exit 1; fi
+          for file in "${files[@]}"; do
+            for intento in 1 2 3 4 5; do
+              if gh release upload "${GITHUB_REF_NAME}" "$file" --clobber; then
+                echo "subido $(basename "$file")"
+                break
+              fi
+              if [ "$intento" = 5 ]; then echo "::error::no se pudo subir $file"; exit 1; fi
+              echo "reintento $intento de $(basename "$file")"
+              sleep 30
+            done
+          done
