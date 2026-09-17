@@ -17,8 +17,8 @@
   "scripts": {
     "typecheck": "pnpm -r --parallel typecheck",
     "build": "pnpm -r build",
-    "dev": "concurrently --kill-others-on-fail --names \"renderer,preload,main,electron\" --prefix-colors \"cyan,yellow,magenta,green\" \"pnpm --filter @vela-ftp/renderer dev\" \"pnpm --filter @vela-ftp/preload dev\" \"pnpm --filter @vela-ftp/main dev\" \"pnpm run dev:electron\"",
-    "dev:electron": "wait-on tcp:5183 file:packages/main/dist/index.js file:packages/preload/dist/index.js && electron .",
+    "dev": "concurrently --kill-others-on-fail --names \"renderer,preload,transfer,main,electron\" --prefix-colors \"cyan,yellow,blue,magenta,green\" \"pnpm --filter @vela-ftp/renderer dev\" \"pnpm --filter @vela-ftp/preload dev\" \"pnpm --filter @vela-ftp/transfer dev\" \"pnpm --filter @vela-ftp/main dev\" \"pnpm run dev:electron\"",
+    "dev:electron": "wait-on tcp:5183 file:packages/main/dist/index.js file:packages/preload/dist/index.js file:packages/transfer/dist/index.js && electron .",
     "clean": "pnpm -r --parallel clean && rimraf node_modules",
     "kit:link": "node scripts/kit-link.mjs link",
     "kit:unlink": "node scripts/kit-link.mjs unlink",
@@ -37,5 +37,9 @@
       "electron",
       "esbuild"
     ]
+  },
+  "dependencies": {
+    "basic-ftp": "6.2.1",
+    "ssh2": "1.17.0"
   }
 }
