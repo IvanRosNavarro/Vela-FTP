@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { app, BrowserWindow } from 'electron';
-import { initLogger, logger } from './logger';
+import { initLogger, logger } from 'vela-kit/logger';
 
 // Puerto distinto al de Vela Browser (5173) para poder tener los dos dev
 // servers abiertos a la vez.
@@ -62,7 +62,7 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   void app.whenReady().then(() => {
-    initLogger();
+    initLogger({ fileBaseName: 'vela-ftp' });
     logger.info(`Vela FTP ${app.getVersion()} arrancando`);
     createMainWindow();
 

@@ -1,7 +1,12 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { themeManager } from './theme';
 import './index.css';
+
+themeManager.initialize();
+// TODO(deuda): leer el tema activo de los ajustes cuando exista la BD (Fase 0 - Paso 3).
+themeManager.setTheme('system');
 
 const container = document.getElementById('root');
 if (!container) {

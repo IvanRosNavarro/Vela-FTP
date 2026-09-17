@@ -19,6 +19,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: vela-kit fijado a un tag
+        shell: bash
+        run: |
+          if grep -A2 '^      vela-kit:' pnpm-lock.yaml | grep -q 'link:'; then
+            echo "::error::pnpm-lock.yaml enlaza vela-kit a una carpeta local. Ejecuta 'pnpm kit:unlink' antes de commitear."
+            exit 1
+          fi
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:

@@ -2,27 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
-/* TODO(deuda): tokens mínimos del tema oscuro; los temas completos llegan con
-   vela-kit en Fase 0 - Paso 2. */
-:root {
-  --vela-bg: #0e0f12;
-  --vela-bg-elevated: #1c1f25;
-  --vela-fg: #e6e8ee;
-  --vela-fg-muted: #8c93a3;
-  --vela-border: rgba(255, 255, 255, 0.08);
-  --vela-sidebar-bg: #16181d;
-  --vela-accent: #7d8cff;
-  --vela-font-family: system-ui, sans-serif;
-  --vela-font-size: 14px;
-}
-
 html,
 body,
 #root {
   height: 100%;
   margin: 0;
   color: var(--vela-fg);
-  background: var(--vela-bg);
   font-family: var(--vela-font-family);
   font-size: var(--vela-font-size);
+}
+
+html {
+  /* vela-kit pone --vela-html-bg a transparent con el glassmorphism activo. */
+  background: var(--vela-html-bg, var(--vela-bg));
 }

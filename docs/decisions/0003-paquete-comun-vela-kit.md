@@ -1,6 +1,6 @@
 # ADR 0003 — Paquete común `vela-kit`
 
-- Estado: propuesto (forma de distribución pendiente)
+- Estado: aceptado
 - Fecha: 2026-09-17
 - Fase: 0 — Cimientos (Paso 2)
 
@@ -13,36 +13,60 @@ haría que divergiera desde el primer día. Habrá más aplicaciones de la famil
 
 ## Decisión
 
-Crear `vela-kit` como **repo propio**, con licencia GPL-3.0-only, consumido
-por Vela Browser, Vela FTP y las futuras apps. Módulos iniciales:
+Crear `vela-kit` como **repo propio** (`C:\Ivan\Repos\github\Vela Kit`), con
+licencia GPL-3.0-only, consumido por Vela Browser, Vela FTP y futuras apps.
 
-| Módulo | Contenido | Proceso |
-|---|---|---|
-| `theme` | tokens, temas builtin, `ThemeManager`, validador CSS, logo | renderer |
-| `ipc` | `validateIpc`, `guardTrustedFrame`, `IpcResult`, errores tipados | main |
-| `logger` | logger con rotación diaria, nombre de fichero configurable | main |
-| `commands` | registro central y `ShortcutTable`, sin definiciones de producto | main |
-| `ui` | toasts, `fuzzy`, Command Palette, title bar, ErrorBoundary | renderer |
-| `security` | CSP dev/prod | main |
+### Forma
 
-Reglas:
+**Un único paquete con subpaths**: `vela-kit/theme`, `vela-kit/logger`,
+`vela-kit/ipc`… Una sola versión que publicar y adoptar.
 
-- El kit no conoce ningún producto: nada de "tabs", "workspaces" ni "sitios".
-  Lo específico se inyecta por parámetros o registros.
-- Se publica compilado (JS + `.d.ts`), con versionado semántico.
-- `react` y `electron` son `peerDependencies`.
-- Cambios que rompan la API exigen versión mayor y adopción coordinada.
+| Módulo | Contenido | Proceso | Estado |
+|---|---|---|---|
+| `theme` | tokens, 8 temas builtin, `ThemeManager`, validador CSS | renderer | v0.1.0 |
+| `logger` | logger con rotación diaria, nombre de fichero configurable | main | v0.1.0 |
+| `ipc` | `IpcResponse`, `validatePayload` (zod), `createFrameGuard`, errores tipados | main | v0.1.0 |
+| `commands` | registro central y `ShortcutTable`, sin definiciones de producto | main | pendiente |
+| `ui` | toasts, `fuzzy`, Command Palette, title bar, ErrorBoundary, logo | renderer | pendiente |
+| `security` | CSP dev/prod | main | pendiente |
 
-## Pendiente de decidir
+### Distribución
 
-Cómo se distribuye para que el CI de cada repo pueda instalarlo sin clonar
-otros repos:
+**Dependencia git fijada a un tag**, no npm. Publicar en npm un único
+paquete para dos consumidores propios no compensa.
 
-1. **npm público** (recomendado): CI sin tokens. Requiere cuenta npm y un scope libre.
-2. **Dependencia git por tag**: sin registro, pero instalaciones más lentas
-   y con aristas en pnpm.
-3. **GitHub Packages**: exige token incluso para instalar paquetes públicos,
-   en local y en CI.
+- Se distribuye como **TypeScript fuente**, sin build. Los consumidores ya
+  compilan con Vite y comprueban con `tsc`, que resuelven los `exports` `.ts`
+  sin configuración extra.
+- Dependencia: `"vela-kit": "github:IvanRosNavarro/Vela-Kit#vX.Y.Z"`. El
+  lockfile fija el commit exacto: un tag movido no cambia nada hasta
+  reinstalar a propósito.
+- Probado con pnpm 9.12: resolución del tag a commit, typecheck y build de
+  Vite de un consumidor.
 
-También hay que decidir si será un único paquete con subpaths
-(`kit/theme`, `kit/ipc`…) o un paquete por módulo.
+### Desarrollo en paralelo
+
+- `pnpm kit:link` enlaza la copia local del kit; un cambio en el kit se ve en
+  el siguiente build o recarga del consumidor, sin tag. Comprobado en Vela FTP.
+- `pnpm link` reescribe `pnpm-lock.yaml`. El CI falla si el lockfile llega con
+  `vela-kit` apuntando a `link:`.
+- El renderer añade la carpeta real del kit a `server.fs.allow` para que el
+  dev server de Vite pueda servirla estando enlazada.
+
+## Reglas del kit
+
+- Agnóstico de producto: nada de pestañas, workspaces, sitios ni `window.api`.
+  Lo específico entra por parámetros, callbacks o registros.
+- Los módulos de renderer no importan `electron` ni `node:*`.
+- `electron`, `react` y `zod` son `peerDependencies`.
+- Versionado semántico; romper la API exige versión mayor y adopción
+  coordinada.
+
+## Consecuencias
+
+- Un cambio en el kit llega a una app solo cuando esa app sube el tag, igual
+  que con un registro.
+- Sin paso de build ni de publicación en el kit.
+- El kit debe compilar con el `tsconfig.base.json` estricto de la familia.
+- Si el repo del kit fuera privado, el CI de las apps necesitaría token; debe
+  ser público, como Vela Browser.

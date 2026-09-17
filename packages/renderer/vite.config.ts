@@ -1,11 +1,15 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { defineConfig, searchForWorkspaceRoot } from 'vite';
 
 const rootPkg = JSON.parse(
   readFileSync(resolve(__dirname, '../../package.json'), 'utf-8'),
 ) as { version: string };
+
+// Con `pnpm kit:link` vela-kit vive fuera del repo y el dev server se
+// negaría a servir sus ficheros.
+const velaKitDir = realpathSync(resolve(__dirname, 'node_modules/vela-kit'));
 
 export default defineConfig({
   plugins: [react()],
@@ -29,5 +33,8 @@ export default defineConfig({
     // 5173 es el de Vela Browser.
     port: 5183,
     strictPort: true,
+    fs: {
+      allow: [searchForWorkspaceRoot(__dirname), velaKitDir],
+    },
   },
 });
