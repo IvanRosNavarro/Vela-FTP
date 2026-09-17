@@ -3,7 +3,7 @@ import { isIP } from 'node:net';
 import type { TLSSocket } from 'node:tls';
 import { Client, FileType, FTPError, type FileInfo } from 'basic-ftp';
 import type { ConnectionConfig, RemoteEntry } from '@vela-ftp/shared';
-import { TransferFailure, toFailure } from '../errors';
+import { TransferFailure, isLocalFsError, localFailure, toFailure } from '../errors';
 import { basenameRemote, joinRemote, parentRemote, redact, type LogSink, type RemoteFs, type StreamOptions } from './RemoteFs';
 
 const DEFAULT_TIMEOUT = 30_000;
@@ -232,11 +232,11 @@ export class FtpFs implements RemoteFs {
   }
 
   async download(remotePath: string, localPath: string, options: StreamOptions): Promise<void> {
-    await this.withProgress(options, () => this.c.downloadTo(localPath, remotePath, options.offset));
+    await this.withProgress(options, localPath, () => this.c.downloadTo(localPath, remotePath, options.offset));
   }
 
   async upload(localPath: string, remotePath: string, options: StreamOptions): Promise<void> {
-    await this.withProgress(options, () =>
+    await this.withProgress(options, localPath, () =>
       options.offset > 0
         ? this.c.appendFrom(createReadStream(localPath, { start: options.offset }), remotePath)
         : this.c.uploadFrom(localPath, remotePath),
@@ -245,9 +245,10 @@ export class FtpFs implements RemoteFs {
 
   /**
    * FTP no sabe abortar una transferencia a medias: cancelar cierra la
-   * conexión, y el pool la descarta.
+   * conexión, y el pool la descarta. Lo mismo tras un error de disco local: la
+   * conexión de datos queda en un estado incierto y no se reutiliza.
    */
-  private async withProgress(options: StreamOptions, run: () => Promise<unknown>): Promise<void> {
+  private async withProgress(options: StreamOptions, localPath: string, run: () => Promise<unknown>): Promise<void> {
     const client = this.c;
     if (options.signal.aborted) throw new TransferFailure('CANCELLED', 'Cancelado');
     let last = 0;
@@ -262,6 +263,10 @@ export class FtpFs implements RemoteFs {
       await run();
     } catch (err) {
       if (options.signal.aborted) throw new TransferFailure('CANCELLED', 'Cancelado');
+      if (isLocalFsError(err, localPath)) {
+        this.close();
+        throw localFailure(err, localPath);
+      }
       throw mapFtpError(err);
     } finally {
       options.signal.removeEventListener('abort', onAbort);

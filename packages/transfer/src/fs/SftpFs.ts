@@ -4,7 +4,7 @@ import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { Client, type ConnectConfig, type FileEntryWithStats, type SFTPWrapper, type Stats } from 'ssh2';
 import type { ConnectionConfig, RemoteEntry } from '@vela-ftp/shared';
-import { TransferFailure, localFailure, toFailure } from '../errors';
+import { TransferFailure, isLocalFsError, localFailure, toFailure } from '../errors';
 import { basenameRemote, joinRemote, type LogSink, type RemoteFs, type StreamOptions } from './RemoteFs';
 
 const DEFAULT_TIMEOUT = 30_000;
@@ -289,7 +289,7 @@ export class SftpFs implements RemoteFs {
     } catch (err) {
       throw localFailure(err, localPath);
     }
-    await this.pipe(options, sftp.createReadStream(remotePath, { start: options.offset }), target, localPath, 'remote');
+    await this.pipe(options, sftp.createReadStream(remotePath, { start: options.offset }), target, localPath);
   }
 
   async upload(localPath: string, remotePath: string, options: StreamOptions): Promise<void> {
@@ -300,7 +300,6 @@ export class SftpFs implements RemoteFs {
       createReadStream(localPath, { start: options.offset }),
       sftp.createWriteStream(remotePath, { flags: options.offset > 0 ? 'r+' : 'w', start: options.offset }),
       localPath,
-      'local',
     );
   }
 
@@ -309,17 +308,14 @@ export class SftpFs implements RemoteFs {
     source: NodeJS.ReadableStream,
     target: NodeJS.WritableStream,
     localPath: string,
-    sourceSide: 'local' | 'remote',
   ): Promise<void> {
     try {
       await pipeline(source, this.counter(options), target, { signal: options.signal });
     } catch (err) {
       if (options.signal.aborted) throw new TransferFailure('CANCELLED', 'Cancelado');
-      const code = (err as { code?: unknown }).code;
-      // Los errores de fs de Node llevan código string (ENOENT…); los de SFTP, numérico.
-      if (typeof code === 'string' && code.startsWith('E') && (sourceSide === 'local' || (err as { path?: string }).path === localPath)) {
-        throw localFailure(err, localPath);
-      }
+      // Solo es local si el error de fs es sobre el fichero local; un ECONNRESET
+      // durante una subida también lleva código string y es de red.
+      if (isLocalFsError(err, localPath)) throw localFailure(err, localPath);
       throw mapSftpError(err);
     }
   }

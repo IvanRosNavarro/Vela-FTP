@@ -58,6 +58,16 @@ export function toFailure(err: unknown): TransferFailure {
   return new TransferFailure('INTERNAL', message);
 }
 
+/**
+ * true si es un error del fs de Node sobre `localPath` (abrir, leer o escribir
+ * el fichero local), para no confundirlo con un error del servidor.
+ */
+export function isLocalFsError(err: unknown, localPath: string): boolean {
+  if (typeof err !== 'object' || err === null) return false;
+  const e = err as { code?: unknown; path?: unknown; syscall?: unknown };
+  return typeof e.code === 'string' && typeof e.syscall === 'string' && e.path === localPath;
+}
+
 /** Errores de ficheros locales (fs de Node). */
 export function localFailure(err: unknown, path: string): TransferFailure {
   if (err instanceof TransferFailure) return err;

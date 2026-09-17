@@ -134,6 +134,18 @@ describe.each(variants)('%s', (_name, setupFn) => {
     expect(await fs.stat('/arbol')).toBeNull();
   });
 
+  it('distingue los errores del disco local de los del servidor', async () => {
+    await writeFile(path.join(s.root, 'local-err.txt'), 'x');
+    const conn = s.make(s.config);
+    await conn.connect();
+    // La carpeta de destino no existe: el fallo es del disco local, no del servidor.
+    const err = await conn.download('/local-err.txt', path.join(s.local, 'no', 'existe', 'x.txt'), options()).catch((e: TransferFailure) => e);
+    expect(err).toBeInstanceOf(TransferFailure);
+    expect((err as TransferFailure).code).toBe('NOT_FOUND');
+    expect((err as TransferFailure).info.details).toMatchObject({ local: true });
+    conn.close();
+  });
+
   it('da errores tipados', async () => {
     await expect(fs.download('/no-existe.txt', path.join(s.local, 'x'), options())).rejects.toMatchObject({ code: 'NOT_FOUND' });
     const bad = s.make({ ...s.config, password: 'mala' });
