@@ -41,6 +41,22 @@ function createMainWindow(): BrowserWindow {
   win.webContents.on('will-navigate', (event) => event.preventDefault());
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
+  // Sin esto, un fallo del renderer solo se ve abriendo DevTools.
+  win.webContents.on('console-message', (event) => {
+    if (event.level !== 'error' && event.level !== 'warning') return;
+    const log = event.level === 'error' ? logger.error : logger.warn;
+    log(`[renderer] ${event.message}`, `${event.sourceId}:${event.lineNumber}`);
+  });
+  win.webContents.on('did-fail-load', (_event, code, description, url) => {
+    logger.error('[renderer] fallo de carga', { code, description, url });
+  });
+  win.webContents.on('render-process-gone', (_event, details) => {
+    logger.error('[renderer] proceso terminado', details);
+  });
+  win.webContents.on('did-finish-load', () => {
+    logger.info('[renderer] shell cargada');
+  });
+
   const load = app.isPackaged
     ? win.loadFile(path.join(__dirname, '../../renderer/dist/index.html'))
     : win.loadURL(DEV_SERVER_URL);
