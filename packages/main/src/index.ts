@@ -20,9 +20,13 @@ import { TransferJobsRepository } from './storage/repositories/TransferJobsRepos
 import { QueueMirror } from './transfer/QueueMirror';
 import { TransferHost } from './transfer/TransferHost';
 import { createMainWindow } from './window/mainWindow';
+import { registerUpdateHandlers } from './ipc/updates';
+import { createUpdateService } from './updater';
+import type { UpdateService } from './updater/UpdateService';
 
 let transfer: TransferHost | null = null;
 let queue: QueueMirror | null = null;
+let updates: UpdateService | null = null;
 
 app.setName('Vela FTP');
 app.setAppUserModelId('com.vela.ftp');
@@ -97,6 +101,10 @@ if (!app.requestSingleInstanceLock()) {
     const history = new PathHistoryRepository(db);
     registerAppHandlers({ sites, knownHosts, secrets, sessions, transfer, queue, history });
 
+    updates = createUpdateService(settings);
+    registerUpdateHandlers(updates);
+    updates.startAutoCheck();
+
     const registry = buildCommandRegistry();
     const shortcuts = new ShortcutManager(registry, settings);
     registerOrganizeHandlers({ sites, projects, bookmarks, history, knownHosts, settings, registry, shortcuts });
@@ -119,6 +127,7 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.on('will-quit', () => {
+    updates?.stop();
     queue?.persist();
     transfer?.stop();
     closeStorage();

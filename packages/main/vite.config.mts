@@ -17,6 +17,8 @@ export default defineConfig({
     rollupOptions: {
       external: [
         'electron',
+        // Va en el package.json raíz y se empaqueta en node_modules del binario.
+        'electron-updater',
         'node:sqlite',
         ...builtinModules,
         ...builtinModules.map((m) => `node:${m}`),

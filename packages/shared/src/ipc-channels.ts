@@ -1,6 +1,7 @@
 // Canales IPC renderer → main. Patrón: `{dominio}:{accion}`.
 import type { BaseIpcErrorCode } from 'vela-kit/ipc';
 import type { CommandAction } from './commands';
+import type { UpdateStatus } from './updates';
 import type { ConflictInfo, JobSnapshot, ProtocolLogLine, TransferError, TransferErrorCode } from './transfer/types';
 
 export const IPC_CHANNELS = {
@@ -79,6 +80,12 @@ export const IPC_CHANNELS = {
   QUEUE_RESUME: 'queue:resume',
 
   DIALOG_OPEN: 'dialog:open',
+
+  UPDATES_STATUS: 'updates:status',
+  UPDATES_CHECK: 'updates:check',
+  UPDATES_DOWNLOAD: 'updates:download',
+  UPDATES_INSTALL: 'updates:install',
+  UPDATES_OPEN_RELEASE: 'updates:open-release',
 } as const;
 
 // Eventos push main → renderer.
@@ -94,6 +101,7 @@ export const IPC_EVENTS = {
   PROJECTS_CHANGED: 'state:projects-changed',
   BOOKMARKS_CHANGED: 'state:bookmarks-changed',
   COMMAND_ACTION: 'state:command-action',
+  UPDATES_CHANGED: 'state:updates-changed',
 } as const;
 
 export type IpcEventName = (typeof IPC_EVENTS)[keyof typeof IPC_EVENTS];
@@ -110,6 +118,7 @@ export interface MainEventPayloads {
   [IPC_EVENTS.PROJECTS_CHANGED]: null;
   [IPC_EVENTS.BOOKMARKS_CHANGED]: null;
   [IPC_EVENTS.COMMAND_ACTION]: { action: CommandAction };
+  [IPC_EVENTS.UPDATES_CHANGED]: UpdateStatus;
 }
 
 /** Códigos de error que el renderer puede recibir en un `IpcResponse`. */

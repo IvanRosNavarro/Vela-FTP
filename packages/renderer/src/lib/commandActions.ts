@@ -8,6 +8,7 @@ import { remotePaneKey, usePanesStore, type PaneKey } from '../stores/panesStore
 import { ACTIVE_STATUSES, FAILED_STATUSES, useQueueStore } from '../stores/queueStore';
 import { useSessionsStore } from '../stores/sessionsStore';
 import { useUiStore } from '../stores/uiStore';
+import { checkForUpdates, openUpdatesSettings } from './updates';
 
 /** Panel con el foco; si es el remoto y no hay sesión, el local. */
 function focusedPaneKey(): PaneKey {
@@ -70,6 +71,10 @@ export function runCommandAction(action: CommandAction): void {
     case 'refresh':
       void panes.refresh('local');
       if (sessions.activeId) void panes.refresh(remotePaneKey(sessions.activeId));
+      return;
+    case 'open-updates':
+      openUpdatesSettings();
+      void checkForUpdates();
       return;
     case 'toggle-bottom-panel':
       useUiStore.getState().toggleBottomPanel();
