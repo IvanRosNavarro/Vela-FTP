@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, rmSync, symlinkSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const CONSUMERS = ['packages/main', 'packages/renderer'];
+const CONSUMERS = ['packages/shared', 'packages/main', 'packages/renderer'];
 const root = resolve(import.meta.dirname, '..');
 const [mode, dirArg] = process.argv.slice(2);
 

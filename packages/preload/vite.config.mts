@@ -26,8 +26,9 @@ export default defineConfig({
     },
   },
   resolve: {
-    alias: {
-      '@vela-ftp/shared': resolve(import.meta.dirname, '../shared/src/index.ts'),
-    },
+    alias: [
+      { find: /^@vela-ftp\/shared$/, replacement: resolve(import.meta.dirname, '../shared/src/index.ts') },
+      { find: /^@vela-ftp\/shared\/(.+)$/, replacement: `${resolve(import.meta.dirname, '../shared/src')}/$1.ts` },
+    ],
   },
 });

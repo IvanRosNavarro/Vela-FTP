@@ -1,10 +1,15 @@
 import path from 'node:path';
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, Menu, nativeTheme } from 'electron';
+import { ShortcutTable, registerCommandShortcuts } from 'vela-kit/commands';
 import { initLogger, logger } from 'vela-kit/logger';
-
-// Puerto distinto al de Vela Browser (5173) para poder tener los dos dev
-// servers abiertos a la vez.
-const DEV_SERVER_URL = 'http://localhost:5183';
+import { buildCommandRegistry } from './commands';
+import { DEV_SERVER_ORIGIN } from './ipc/guard';
+import { registerSettingsHandlers } from './ipc/settings';
+import { registerWindowHandlers } from './ipc/window';
+import { applyDevCsp, registerAppProtocol, registerAppSchemeAsPrivileged } from './protocol/appProtocol';
+import { closeStorage, initStorage } from './storage/db';
+import { SettingsRepository } from './storage/repositories/SettingsRepository';
+import { createMainWindow } from './window/mainWindow';
 
 app.setName('Vela FTP');
 app.setAppUserModelId('com.vela.ftp');
@@ -16,55 +21,17 @@ process.on('unhandledRejection', (reason) => {
   logger.error('unhandledRejection', reason);
 });
 
-function createMainWindow(): BrowserWindow {
-  const win = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    minWidth: 800,
-    minHeight: 500,
-    title: 'Vela FTP',
-    backgroundColor: '#0e0f12',
-    show: false,
-    webPreferences: {
-      preload: path.join(__dirname, '../../preload/dist/index.js'),
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: true,
-      webSecurity: true,
-    },
-  });
+registerAppSchemeAsPrivileged();
 
-  win.once('ready-to-show', () => win.show());
-
-  // La shell nunca navega ni abre ventanas: los enlaces externos pasarán por
-  // shell.openExternal cuando haga falta.
-  win.webContents.on('will-navigate', (event) => event.preventDefault());
-  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-
-  // Sin esto, un fallo del renderer solo se ve abriendo DevTools.
-  win.webContents.on('console-message', (event) => {
-    if (event.level !== 'error' && event.level !== 'warning') return;
-    const log = event.level === 'error' ? logger.error : logger.warn;
-    log(`[renderer] ${event.message}`, `${event.sourceId}:${event.lineNumber}`);
-  });
-  win.webContents.on('did-fail-load', (_event, code, description, url) => {
-    logger.error('[renderer] fallo de carga', { code, description, url });
-  });
-  win.webContents.on('render-process-gone', (_event, details) => {
-    logger.error('[renderer] proceso terminado', details);
-  });
-  win.webContents.on('did-finish-load', () => {
-    logger.info('[renderer] shell cargada');
-  });
-
-  const load = app.isPackaged
-    ? win.loadFile(path.join(__dirname, '../../renderer/dist/index.html'))
-    : win.loadURL(DEV_SERVER_URL);
-  load.catch((err: unknown) => {
-    logger.error('No se pudo cargar la shell', err);
-  });
-
-  return win;
+/** macOS necesita menú de aplicación para copiar/pegar y Cmd+Q; el resto va sin menú. */
+function setApplicationMenu(): void {
+  if (process.platform !== 'darwin') {
+    Menu.setApplicationMenu(null);
+    return;
+  }
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }]),
+  );
 }
 
 if (!app.requestSingleInstanceLock()) {
@@ -80,14 +47,45 @@ if (!app.requestSingleInstanceLock()) {
   void app.whenReady().then(() => {
     initLogger({ fileBaseName: 'vela-ftp' });
     logger.info(`Vela FTP ${app.getVersion()} arrancando`);
-    createMainWindow();
+
+    const db = initStorage();
+    const settings = new SettingsRepository(db);
+
+    if (app.isPackaged) {
+      registerAppProtocol(path.join(__dirname, '../../renderer/dist'));
+    } else {
+      applyDevCsp(DEV_SERVER_ORIGIN);
+    }
+    setApplicationMenu();
+
+    registerSettingsHandlers(settings);
+    registerWindowHandlers();
+
+    const registry = buildCommandRegistry();
+    const shortcuts = new ShortcutTable({ reserved: ['Ctrl+Shift+P'] });
+    registerCommandShortcuts(shortcuts, registry, {
+      buildContext: (windowId) => ({ windowId }),
+      onConflict: (combo, id) => logger.warn(`[shortcuts] "${combo}" de ${id} ignorado por conflicto`),
+    });
+
+    const openWindow = () =>
+      createMainWindow({
+        themeId: settings.get('ui:theme'),
+        prefersDark: nativeTheme.shouldUseDarkColors,
+        getShortcuts: () => shortcuts,
+      });
+    openWindow();
 
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
+      if (BrowserWindow.getAllWindows().length === 0) openWindow();
     });
   });
 
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
+  });
+
+  app.on('will-quit', () => {
+    closeStorage();
   });
 }

@@ -8,17 +8,20 @@
     "build": "vite build",
     "dev": "vite build --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rimraf dist *.tsbuildinfo"
+    "clean": "rimraf dist *.tsbuildinfo",
+    "test": "vitest run"
   },
   "dependencies": {
     "@vela-ftp/shared": "workspace:*",
-    "vela-kit": "github:IvanRosNavarro/Vela-Kit#v0.2.0"
+    "vela-kit": "github:IvanRosNavarro/Vela-Kit#v0.3.0",
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/node": "22.10.0",
     "electron": "42.11.4",
     "rimraf": "5.0.7",
     "typescript": "5.4.5",
-    "vite": "6.4.3"
+    "vite": "6.4.3",
+    "vitest": "4.1.11"
   }
 }

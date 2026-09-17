@@ -21,7 +21,8 @@
     "dev:electron": "wait-on tcp:5183 file:packages/main/dist/index.js file:packages/preload/dist/index.js && electron .",
     "clean": "pnpm -r --parallel clean && rimraf node_modules",
     "kit:link": "node scripts/kit-link.mjs link",
-    "kit:unlink": "node scripts/kit-link.mjs unlink"
+    "kit:unlink": "node scripts/kit-link.mjs unlink",
+    "test": "pnpm -r --parallel --if-present test"
   },
   "devDependencies": {
     "@types/node": "22.10.0",
