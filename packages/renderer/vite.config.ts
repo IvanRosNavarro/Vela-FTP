@@ -21,7 +21,11 @@ export default defineConfig({
     target: 'chrome120',
     outDir: 'dist',
     emptyOutDir: true,
-    sourcemap: true,
+    // Los mapas de Monaco pesan ~45 MB: agotan la memoria de Vite en el runner de
+    // macOS y engordan el binario sin servir de nada al usuario.
+    sourcemap: false,
+    // Monaco y sus workers superan con mucho el aviso por defecto; se cargan bajo demanda.
+    chunkSizeWarningLimit: 8000,
   },
   resolve: {
     alias: {
