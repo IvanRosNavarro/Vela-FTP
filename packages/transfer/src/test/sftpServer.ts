@@ -10,15 +10,21 @@ const { STATUS_CODE, flagsToString } = utils.sftp;
 
 export interface TestSftpServer {
   port: number;
+  /** Permisos fijados por el cliente, por ruta local. */
+  modes: Map<string, number>;
   /** Huella SHA256 de la clave de host del servidor. */
   fingerprint: string;
   close(): Promise<void>;
 }
 
-function attrsOf(file: string): Attributes {
+/** Permisos fijados por SETSTAT/FSETSTAT: en Windows el sistema de ficheros no los guarda. */
+type Modes = Map<string, number>;
+
+function attrsOf(file: string, modes: Modes): Attributes {
   const s = statSync(file);
+  const permissions = modes.get(file) ?? s.mode & 0o7777;
   return {
-    mode: s.mode,
+    mode: (s.mode & ~0o7777) | permissions,
     uid: 0,
     gid: 0,
     size: s.size,
@@ -42,6 +48,7 @@ export async function startSftpServer(root: string, user: string, pass: string):
 
   const local = (remotePath: string) => path.join(root, ...path.posix.resolve('/', remotePath).split('/').filter(Boolean));
   const clients = new Set<{ end(): void }>();
+  const modes: Modes = new Map();
 
   const server = new Server({ hostKeys: [keys.private] }, (client) => {
     clients.add(client);
@@ -56,9 +63,9 @@ export async function startSftpServer(root: string, user: string, pass: string):
         const session = acceptSession();
         session.on('sftp', (acceptSftp) => {
           const sftp = acceptSftp();
-          const handles = new Map<number, { fd?: number; dir?: string; listed?: boolean }>();
+          const handles = new Map<number, { fd?: number; path?: string; dir?: string; listed?: boolean }>();
           let nextHandle = 1;
-          const newHandle = (value: { fd?: number; dir?: string }) => {
+          const newHandle = (value: { fd?: number; path?: string; dir?: string }) => {
             const id = nextHandle++;
             handles.set(id, value);
             const buf = Buffer.alloc(4);
@@ -78,8 +85,8 @@ export async function startSftpServer(root: string, user: string, pass: string):
             const resolved = path.posix.resolve('/', p);
             sftp.name(reqid, [{ filename: resolved, longname: resolved, attrs: {} as Attributes }]);
           });
-          sftp.on('STAT', (reqid, p) => guard(reqid, () => sftp.attrs(reqid, attrsOf(local(p)))));
-          sftp.on('LSTAT', (reqid, p) => guard(reqid, () => sftp.attrs(reqid, attrsOf(local(p)))));
+          sftp.on('STAT', (reqid, p) => guard(reqid, () => sftp.attrs(reqid, attrsOf(local(p), modes))));
+          sftp.on('LSTAT', (reqid, p) => guard(reqid, () => sftp.attrs(reqid, attrsOf(local(p), modes))));
           sftp.on('READLINK', (reqid) => sftp.status(reqid, STATUS_CODE.OP_UNSUPPORTED));
           sftp.on('OPENDIR', (reqid, p) =>
             guard(reqid, () => {
@@ -94,7 +101,7 @@ export async function startSftpServer(root: string, user: string, pass: string):
             state.listed = true;
             guard(reqid, () => {
               const names = readdirSync(state.dir!).map((name) => {
-                const attrs = attrsOf(path.join(state.dir!, name));
+                const attrs = attrsOf(path.join(state.dir!, name), modes);
                 return { filename: name, longname: `-rw-r--r-- 1 owner group ${attrs.size} Jan 1 00:00 ${name}`, attrs };
               });
               sftp.name(reqid, names);
@@ -102,7 +109,7 @@ export async function startSftpServer(root: string, user: string, pass: string):
           });
           sftp.on('OPEN', (reqid, filename, flags) =>
             guard(reqid, () => {
-              sftp.handle(reqid, newHandle({ fd: openSync(local(filename), flagsToString(flags) ?? 'r') }));
+              sftp.handle(reqid, newHandle({ fd: openSync(local(filename), flagsToString(flags) ?? 'r'), path: local(filename) }));
             }),
           );
           sftp.on('READ', (reqid, h, offset, length) =>
@@ -131,8 +138,18 @@ export async function startSftpServer(root: string, user: string, pass: string):
               sftp.attrs(reqid, { mode: s.mode, uid: 0, gid: 0, size: s.size, atime: 0, mtime: Math.floor(s.mtimeMs / 1000) });
             }),
           );
-          sftp.on('FSETSTAT', (reqid) => sftp.status(reqid, STATUS_CODE.OK));
-          sftp.on('SETSTAT', (reqid, p) => guard(reqid, () => (statSync(local(p)), sftp.status(reqid, STATUS_CODE.OK))));
+          sftp.on('FSETSTAT', (reqid, h, attrs) => {
+            const state = getHandle(h);
+            if (state?.path && attrs.mode !== undefined) modes.set(state.path, attrs.mode & 0o7777);
+            sftp.status(reqid, STATUS_CODE.OK);
+          });
+          sftp.on('SETSTAT', (reqid, p, attrs) =>
+            guard(reqid, () => {
+              statSync(local(p));
+              if (attrs.mode !== undefined) modes.set(local(p), attrs.mode & 0o7777);
+              sftp.status(reqid, STATUS_CODE.OK);
+            }),
+          );
           sftp.on('CLOSE', (reqid, h) => {
             const id = h.readUInt32BE(0);
             const state = handles.get(id);
@@ -142,7 +159,7 @@ export async function startSftpServer(root: string, user: string, pass: string):
           });
           sftp.on('MKDIR', (reqid, p) => guard(reqid, () => (mkdirSync(local(p)), sftp.status(reqid, STATUS_CODE.OK))));
           sftp.on('RMDIR', (reqid, p) => guard(reqid, () => (rmdirSync(local(p)), sftp.status(reqid, STATUS_CODE.OK))));
-          sftp.on('REMOVE', (reqid, p) => guard(reqid, () => (unlinkSync(local(p)), sftp.status(reqid, STATUS_CODE.OK))));
+          sftp.on('REMOVE', (reqid, p) => guard(reqid, () => (unlinkSync(local(p)), modes.delete(local(p)), sftp.status(reqid, STATUS_CODE.OK))));
           sftp.on('RENAME', (reqid, from, to) =>
             guard(reqid, () => (renameSync(local(from), local(to)), sftp.status(reqid, STATUS_CODE.OK))),
           );
@@ -154,6 +171,7 @@ export async function startSftpServer(root: string, user: string, pass: string):
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   return {
     port: (server.address() as AddressInfo).port,
+    modes,
     fingerprint,
     close: () =>
       new Promise<void>((resolve) => {

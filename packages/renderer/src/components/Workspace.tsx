@@ -1,10 +1,13 @@
-import { Plug, Plus, Unplug, X } from 'lucide-react';
+import { useMemo } from 'react';
+import { GitCompareArrows, Link2, Plug, Plus, Unplug, X } from 'lucide-react';
+import { compareListings, type CompareStatus } from '../lib/compare';
+import { toggleSyncBrowsing, useSyncBrowsing } from '../lib/syncBrowsing';
 import { useDialogStore } from '../stores/dialogStore';
-import { remotePaneKey } from '../stores/panesStore';
+import { remotePaneKey, usePanesStore } from '../stores/panesStore';
 import { useSessionsStore } from '../stores/sessionsStore';
 import { useSitesStore } from '../stores/sitesStore';
 import { useUiStore } from '../stores/uiStore';
-import { FilePane } from './panes/FilePane';
+import { COMPARE_COLORS, FilePane } from './panes/FilePane';
 
 function RemotePlaceholder() {
   const sites = useSitesStore((s) => s.sites);
@@ -30,6 +33,23 @@ function RemotePlaceholder() {
   );
 }
 
+function CompareLegend() {
+  const item = (status: CompareStatus, label: string) => (
+    <span className="flex items-center gap-1">
+      <span className="h-2.5 w-2.5 rounded-sm" style={{ background: COMPARE_COLORS[status] }} />
+      {label}
+    </span>
+  );
+  return (
+    <div className="flex items-center gap-4 border-b border-[var(--vela-border)] px-3 py-1 text-[10px] text-[var(--vela-fg-muted)]">
+      <span className="font-semibold uppercase tracking-wider">Comparando</span>
+      {item('only', 'Solo en un lado')}
+      {item('newer', 'Más reciente')}
+      {item('different', 'Distinto tamaño')}
+    </div>
+  );
+}
+
 export function Workspace() {
   const sessions = useSessionsStore((s) => s.sessions);
   const activeId = useSessionsStore((s) => s.activeId);
@@ -37,11 +57,24 @@ export function Workspace() {
   const disconnect = useSessionsStore((s) => s.disconnect);
   const focused = useUiStore((s) => s.focusedPane);
   const setFocused = useUiStore((s) => s.setFocusedPane);
+  const compareMode = useUiStore((s) => s.compareMode);
+  const toggleCompare = useUiStore((s) => s.toggleCompare);
+  const syncBrowsing = useUiStore((s) => s.syncBrowsing);
+  const localEntries = usePanesStore((s) => s.panes.local?.entries);
+  const remoteEntries = usePanesStore((s) => (activeId ? s.panes[remotePaneKey(activeId)]?.entries : undefined));
+
+  useSyncBrowsing();
+
+  const comparison = useMemo(
+    () => (compareMode && localEntries && remoteEntries ? compareListings(localEntries, remoteEntries) : null),
+    [compareMode, localEntries, remoteEntries],
+  );
 
   return (
     <main id="vela-content" className="flex min-h-0 min-w-0 flex-1 flex-col">
       {sessions.length > 0 && (
-        <div className="flex items-end gap-0.5 border-b border-[var(--vela-border)] px-1 pt-1" role="tablist" aria-label="Sesiones">
+        <div className="flex items-end gap-0.5 border-b border-[var(--vela-border)] px-1 pt-1">
+          <div className="flex min-w-0 flex-1 items-end gap-0.5" role="tablist" aria-label="Sesiones">
           {sessions.map((session) => (
             <div
               key={session.sessionId}
@@ -66,10 +99,30 @@ export function Workspace() {
               </button>
             </div>
           ))}
+          </div>
+          <div className="flex items-center gap-0.5 pb-1">
+            <button
+              className={`vf-icon-btn ${compareMode ? 'bg-[var(--vela-sidebar-active-bg)] text-[var(--vela-accent)]' : ''}`}
+              aria-pressed={compareMode}
+              title="Comparar carpetas (Ctrl+O)"
+              onClick={toggleCompare}
+            >
+              <GitCompareArrows size={14} />
+            </button>
+            <button
+              className={`vf-icon-btn ${syncBrowsing ? 'bg-[var(--vela-sidebar-active-bg)] text-[var(--vela-accent)]' : ''}`}
+              aria-pressed={syncBrowsing !== null}
+              title={syncBrowsing ? `Navegación sincronizada: ${syncBrowsing.localBase} ↔ ${syncBrowsing.remoteBase} (Ctrl+Y)` : 'Navegación sincronizada (Ctrl+Y)'}
+              onClick={toggleSyncBrowsing}
+            >
+              <Link2 size={14} />
+            </button>
+          </div>
         </div>
       )}
+      {comparison && <CompareLegend />}
       <div className="flex min-h-0 flex-1">
-        <FilePane paneKey="local" sessionId={activeId} focused={focused === 'local'} onFocus={() => setFocused('local')} />
+        <FilePane paneKey="local" sessionId={activeId} focused={focused === 'local'} onFocus={() => setFocused('local')} compare={comparison?.local ?? null} />
         <div className="w-px shrink-0 bg-[var(--vela-border)]" />
         {sessions.map((session) => (
           // Cada sesión conserva su panel montado para no perder selección ni scroll.
@@ -79,6 +132,7 @@ export function Workspace() {
               sessionId={session.sessionId}
               focused={focused === 'remote'}
               onFocus={() => setFocused('remote')}
+              compare={session.sessionId === activeId ? (comparison?.remote ?? null) : null}
             />
           </div>
         ))}

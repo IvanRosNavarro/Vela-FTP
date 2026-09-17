@@ -49,6 +49,18 @@ export const TRANSFER_REQUEST_SCHEMAS = {
   'fs.delete': z.object({ sessionId, path: remotePath, isDirectory: z.boolean() }),
   'fs.chmod': z.object({ sessionId, path: remotePath, mode: z.number().int().min(0).max(0o7777) }),
   'fs.realpath': z.object({ sessionId, path: z.string().min(1).max(4096) }),
+  /** Baja un fichero suelto fuera de la cola (editor, vista previa). */
+  'file.fetch': z.object({ sessionId, path: remotePath, localPath, maxBytes: z.number().int().min(1).max(512 * 1024 * 1024) }),
+  /**
+   * Sube un fichero suelto fuera de la cola. Con `expected`, falla con
+   * REMOTE_CHANGED si el remoto ya no tiene ese tamaño y fecha.
+   */
+  'file.store': z.object({
+    sessionId,
+    localPath,
+    path: remotePath,
+    expected: z.object({ size: z.number().int().min(0), modifiedAt: z.number().nullable() }).nullable(),
+  }),
   'queue.enqueue': z.object({ jobs: z.array(transferJobSchema).min(1).max(10_000) }),
   'queue.cancel': z.object({ jobIds: z.array(z.string()).max(10_000) }),
   'queue.retry': z.object({ jobIds: z.array(z.string()).max(10_000) }),
@@ -73,6 +85,8 @@ export interface TransferResults {
   'fs.delete': null;
   'fs.chmod': null;
   'fs.realpath': string;
+  'file.fetch': RemoteEntry;
+  'file.store': RemoteEntry | null;
   'queue.enqueue': null;
   'queue.cancel': null;
   'queue.retry': null;

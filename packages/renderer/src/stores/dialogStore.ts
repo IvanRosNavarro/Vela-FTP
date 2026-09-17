@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import type { ConflictInfo, Site } from '@vela-ftp/shared';
 
+export type PreviewSource = { kind: 'remote'; sessionId: string; path: string } | { kind: 'local'; path: string };
+
 export type DialogSpec =
   | { kind: 'confirm'; title: string; message: string; confirmLabel: string; danger: boolean; resolve: (ok: boolean) => void }
   | { kind: 'prompt'; title: string; label: string; initial: string; confirmLabel: string; validate: (v: string) => string | null; resolve: (value: string | null) => void }
@@ -8,6 +10,7 @@ export type DialogSpec =
   | { kind: 'settings'; section?: 'general' | 'appearance' | 'shortcuts' | 'security' | 'about' }
   | { kind: 'palette'; initialQuery?: string }
   | { kind: 'importFileZilla' }
+  | { kind: 'preview'; source: PreviewSource }
   | {
       kind: 'hostKey';
       reason: 'HOST_KEY_UNKNOWN' | 'HOST_KEY_MISMATCH' | 'CERT_UNTRUSTED';

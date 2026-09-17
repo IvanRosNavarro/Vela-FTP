@@ -28,7 +28,9 @@ export type CommandAction =
   | 'cancel-all'
   | 'retry-failed'
   | 'toggle-bottom-panel'
-  | 'open-updates';
+  | 'open-updates'
+  | 'toggle-compare'
+  | 'toggle-sync-browsing';
 
 export interface CommandInfo {
   id: string;

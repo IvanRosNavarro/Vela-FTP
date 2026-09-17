@@ -11,9 +11,9 @@ import {
 import type { z } from 'zod';
 import { TransferFailure, toFailure } from './errors';
 import { FtpFs } from './fs/FtpFs';
-import type { RemoteFsFactory } from './fs/RemoteFs';
+import type { RemoteFs, RemoteFsFactory } from './fs/RemoteFs';
 import { SftpFs } from './fs/SftpFs';
-import { SessionPool } from './pool';
+import { SessionPool, isBrokenConnection } from './pool';
 import { TransferQueue } from './queue';
 
 export const defaultFactory: RemoteFsFactory = (config: ConnectionConfig, log) =>
@@ -49,6 +49,22 @@ export class TransferEngine {
       if (!p) throw new TransferFailure('NOT_CONNECTED', 'La sesión no está abierta');
       return p;
     };
+
+    /** Operación suelta en una conexión de transferencia, sin bloquear la navegación. */
+    const withTransfer = async <T>(sessionId: string, fn: (fs: RemoteFs) => Promise<T>): Promise<T> => {
+      const p = pool(sessionId);
+      const fs = await p.acquire();
+      let broken = false;
+      try {
+        return await fn(fs);
+      } catch (err) {
+        broken = isBrokenConnection(err) || toFailure(err).code === 'LOCAL_IO';
+        throw err;
+      } finally {
+        p.release(fs, broken);
+      }
+    };
+    const noProgress = () => ({ offset: 0, onProgress: () => undefined, signal: new AbortController().signal });
 
     this.handlers = {
       'session.open': async ({ sessionId, config, maxTransferConnections }) => {
@@ -99,6 +115,30 @@ export class TransferEngine {
         return null;
       },
       'fs.realpath': ({ sessionId, path }) => pool(sessionId).withBrowse((fs) => fs.realpath(path), true),
+      'file.fetch': ({ sessionId, path, localPath, maxBytes }) =>
+        withTransfer(sessionId, async (fs) => {
+          const entry = await fs.stat(path);
+          if (!entry) throw new TransferFailure('NOT_FOUND', `No existe: ${path}`);
+          if (entry.type === 'dir') throw new TransferFailure('PROTOCOL', `Es una carpeta: ${path}`);
+          if (entry.size > maxBytes) throw new TransferFailure('TOO_LARGE', `${path} ocupa ${entry.size} bytes`, { size: entry.size, maxBytes });
+          await fs.download(path, localPath, noProgress());
+          return entry;
+        }),
+      'file.store': ({ sessionId, localPath, path, expected }) =>
+        withTransfer(sessionId, async (fs) => {
+          if (expected) {
+            const current = await fs.stat(path);
+            // Borrado en el servidor también cuenta como cambio.
+            if (!current || current.size !== expected.size || current.modifiedAt !== expected.modifiedAt) {
+              throw new TransferFailure('REMOTE_CHANGED', `${path} cambió en el servidor`, {
+                size: current?.size ?? null,
+                modifiedAt: current?.modifiedAt ?? null,
+              });
+            }
+          }
+          await fs.upload(localPath, path, noProgress());
+          return fs.stat(path);
+        }),
       'queue.enqueue': async ({ jobs }) => {
         this.queue.enqueue(jobs);
         return null;

@@ -111,6 +111,26 @@ const api: PreloadApi = {
     open: (options) => invoke(C.DIALOG_OPEN, options),
   },
 
+  files: {
+    editRemote: (sessionId, path) => invoke(C.FILES_EDIT_REMOTE, { sessionId, path }),
+    previewRemote: (sessionId, path) => invoke(C.FILES_PREVIEW_REMOTE, { sessionId, path }),
+    previewLocal: (path) => invoke(C.FILES_PREVIEW_LOCAL, { path }),
+    diff: (sessionId, remotePath, localPath) => invoke(C.FILES_DIFF, { sessionId, remotePath, localPath }),
+  },
+
+  editor: {
+    load: (id) => invoke(C.EDITOR_LOAD, { id }),
+    save: (id, content, force) => invoke(C.EDITOR_SAVE, { id, content, force }),
+    setDirty: (id, dirty) => invoke(C.EDITOR_SET_DIRTY, { id, dirty }),
+    close: (id) => invoke(C.EDITOR_CLOSE, { id }),
+  },
+
+  watch: {
+    list: () => invoke(C.WATCH_LIST),
+    start: (sessionId, localDir, remoteDir) => invoke(C.WATCH_START, { sessionId, localDir, remoteDir }),
+    stop: (id) => invoke(C.WATCH_STOP, { id }),
+  },
+
   updates: {
     status: () => invoke(C.UPDATES_STATUS),
     check: () => invoke(C.UPDATES_CHECK),

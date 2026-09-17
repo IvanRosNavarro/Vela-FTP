@@ -10,24 +10,33 @@ import { suspendedShortcutWindows } from '../commands';
 import { DEV_SERVER_ORIGIN } from '../ipc/guard';
 import { APP_URL } from '../protocol/appProtocol';
 
-export interface MainWindowOptions {
+export interface ShellWindowOptions {
   /** Tema guardado, para que el marco nativo nazca con su color y no parpadee. */
   themeId: string;
   prefersDark: boolean;
-  getShortcuts: () => ShortcutTable | null;
+  title: string;
+  width: number;
+  height: number;
+  minWidth: number;
+  minHeight: number;
+  /** Parámetros de la URL: el renderer elige la vista con `view`. */
+  query?: Record<string, string>;
+  /** Atajos globales de la app; las ventanas auxiliares no los llevan. */
+  getShortcuts?: () => ShortcutTable | null;
 }
 
-export function createMainWindow(options: MainWindowOptions): BrowserWindow {
+/** Ventana que carga la shell del renderer, con la misma seguridad para todas. */
+export function createShellWindow(options: ShellWindowOptions): BrowserWindow {
   const platform = process.platform as DesktopPlatform;
   const theme = resolveTheme(options.themeId, options.prefersDark);
   const bg = theme.variables['--vela-bg'] ?? '#0e0f12';
 
   const win = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    minWidth: 800,
-    minHeight: 500,
-    title: 'Vela FTP',
+    width: options.width,
+    height: options.height,
+    minWidth: options.minWidth,
+    minHeight: options.minHeight,
+    title: options.title,
     backgroundColor: bg,
     show: false,
     ...titleBarWindowOptions(platform, {
@@ -62,18 +71,18 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
   win.webContents.on('render-process-gone', (_event, details) => {
     logger.error('[renderer] proceso terminado', details);
   });
-  win.webContents.on('did-finish-load', () => {
-    logger.info('[renderer] shell cargada');
-  });
 
   const stopWatching = watchMaximized(win, (maximized) => {
     if (!win.isDestroyed()) win.webContents.send(IPC_EVENTS.WINDOW_MAXIMIZED_CHANGED, { maximized });
   });
-  const detachShortcuts = attachShortcuts(options.getShortcuts, win.webContents, () => (win.isDestroyed() ? null : win.id), {
-    // Mientras se captura un atajo en ajustes, las teclas llegan a la página.
-    passThrough: (_input, windowId) => suspendedShortcutWindows.has(windowId),
-    onError: (source, err) => logger.warn(`[shortcuts] ${source} falló`, err),
-  });
+  const getShortcuts = options.getShortcuts;
+  const detachShortcuts = getShortcuts
+    ? attachShortcuts(getShortcuts, win.webContents, () => (win.isDestroyed() ? null : win.id), {
+        // Mientras se captura un atajo en ajustes, las teclas llegan a la página.
+        passThrough: (_input, windowId) => suspendedShortcutWindows.has(windowId),
+        onError: (source, err) => logger.warn(`[shortcuts] ${source} falló`, err),
+      })
+    : () => undefined;
   const windowId = win.id;
   win.on('closed', () => {
     suspendedShortcutWindows.delete(windowId);
@@ -81,10 +90,25 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
     detachShortcuts();
   });
 
-  const url = app.isPackaged ? APP_URL : `${DEV_SERVER_ORIGIN}/`;
-  win.loadURL(url).catch((err: unknown) => {
+  const base = app.isPackaged ? APP_URL : `${DEV_SERVER_ORIGIN}/`;
+  const search = options.query ? `?${new URLSearchParams(options.query).toString()}` : '';
+  win.loadURL(`${base}${search}`).catch((err: unknown) => {
     logger.error('No se pudo cargar la shell', err);
   });
 
+  return win;
+}
+
+export interface MainWindowOptions {
+  themeId: string;
+  prefersDark: boolean;
+  getShortcuts: () => ShortcutTable | null;
+}
+
+export function createMainWindow(options: MainWindowOptions): BrowserWindow {
+  const win = createShellWindow({ ...options, title: 'Vela FTP', width: 1280, height: 800, minWidth: 800, minHeight: 500 });
+  win.webContents.on('did-finish-load', () => {
+    logger.info('[renderer] shell cargada');
+  });
   return win;
 }

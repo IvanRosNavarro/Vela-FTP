@@ -84,6 +84,9 @@ function promisify<T>(fn: (cb: (err: Error | null | undefined, value: T) => void
   });
 }
 
+/** Permisos de un fichero subido que no existía. */
+export const NEW_FILE_MODE = 0o644;
+
 export class SftpFs implements RemoteFs {
   readonly protocol = 'sftp' as const;
   private conn: Client | null = null;
@@ -262,6 +265,12 @@ export class SftpFs implements RemoteFs {
     return this.run(`CHMOD ${mode.toString(8)} ${path}`, (s, cb) => s.chmod(path, mode, cb));
   }
 
+  async setModifiedTime(path: string, time: number): Promise<boolean> {
+    const seconds = Math.floor(time / 1000);
+    await this.run(`UTIMES ${seconds} ${path}`, (s, cb) => s.utimes(path, seconds, seconds, cb));
+    return true;
+  }
+
   async realpath(path: string): Promise<string> {
     const sftp = this.s;
     try {
@@ -294,11 +303,16 @@ export class SftpFs implements RemoteFs {
 
   async upload(localPath: string, remotePath: string, options: StreamOptions): Promise<void> {
     const sftp = this.s;
+    // ssh2 hace fchmod al abrir con 0o666 si no se le da modo: cada subida dejaría
+    // el fichero escribible por cualquiera. Se conservan los permisos del que se
+    // sobrescribe; uno nuevo nace con 0o644, como con el umask habitual.
+    const existing = await this.stat(remotePath);
+    const mode = existing?.mode ?? NEW_FILE_MODE;
     this.log('command', `PUT ${remotePath}${options.offset ? ` desde ${options.offset}` : ''}`);
     await this.pipe(
       options,
       createReadStream(localPath, { start: options.offset }),
-      sftp.createWriteStream(remotePath, { flags: options.offset > 0 ? 'r+' : 'w', start: options.offset }),
+      sftp.createWriteStream(remotePath, { flags: options.offset > 0 ? 'r+' : 'w', start: options.offset, mode }),
       localPath,
     );
   }

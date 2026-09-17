@@ -26,6 +26,12 @@ export class SessionManager {
     return this.sessions.get(sessionId);
   }
 
+  /** Una sesión abierta del sitio, si la hay. */
+  findBySite(siteId: string): SessionInfo | undefined {
+    for (const info of this.sessions.values()) if (info.siteId === siteId) return info;
+    return undefined;
+  }
+
   /** Construye la configuración con los secretos descifrados; solo vive en memoria. */
   async buildConfig(siteId: string): Promise<{ config: ConnectionConfig; maxConnections: number }> {
     const site = this.sites.get(siteId);

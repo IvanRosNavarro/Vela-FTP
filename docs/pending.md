@@ -12,3 +12,8 @@
 - Arrastrar ficheros remotos al explorador del SO (requiere descargar antes a
   una carpeta temporal).
 - Mover ficheros arrastrando dentro del mismo panel.
+- Vigilancia de carpetas: no propaga borrados ni sobrevive a un reinicio.
+- Los paneles no se refrescan solos con cambios del disco local ni al crear
+  carpetas remotas desde la vigilancia.
+- Primer arranque en dev: una vez el preload sandboxed falló con
+  `binding.startupData` nulo (fallo de Electron, no reproducido al relanzar).

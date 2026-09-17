@@ -29,6 +29,8 @@ export interface RemoteFs {
   /** Borra la carpeta y su contenido. */
   deleteDir(path: string): Promise<void>;
   chmod(path: string, mode: number): Promise<void>;
+  /** Fija la fecha de modificación (ms epoch). false si el servidor no lo admite. */
+  setModifiedTime(path: string, time: number): Promise<boolean>;
   realpath(path: string): Promise<string>;
   download(remotePath: string, localPath: string, options: StreamOptions): Promise<void>;
   upload(localPath: string, remotePath: string, options: StreamOptions): Promise<void>;

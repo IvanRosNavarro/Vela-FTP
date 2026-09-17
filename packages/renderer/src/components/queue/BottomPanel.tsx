@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, CircleAlert, CircleCheck, CircleX, Clock, Loader2, RotateCcw, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, CircleAlert, CircleCheck, CircleX, Clock, Loader2, Radar, RotateCcw, Square, Trash2, X } from 'lucide-react';
 import { List, type RowComponentProps } from 'react-window';
 import type { JobSnapshot, ProtocolLogLine } from '@vela-ftp/shared';
 import { toast } from 'vela-kit/ui';
@@ -7,12 +7,14 @@ import { formatEta, formatSize, formatSpeed } from '../../lib/format';
 import { call, describeError, errorText } from '../../lib/ipc';
 import { ACTIVE_STATUSES, FAILED_STATUSES, useQueueStore } from '../../stores/queueStore';
 import { useSessionsStore } from '../../stores/sessionsStore';
+import { stopWatch, useWatchStore } from '../../stores/watchStore';
+import { formatDate } from '../../lib/format';
 import { useContextMenu } from '../ContextMenu';
 
 /** Prefijo de sesión de los trabajos recuperados de una ejecución anterior. */
 const RESTORED = 'restored:';
 
-type Tab = 'queue' | 'failed' | 'done' | 'log';
+type Tab = 'queue' | 'failed' | 'done' | 'watch' | 'log';
 
 const STATUS_LABEL: Record<JobSnapshot['status'], string> = {
   queued: 'En cola',
@@ -116,12 +118,44 @@ function LogRow({ index, style, ariaAttributes, lines }: RowComponentProps<{ lin
   );
 }
 
+function WatchList() {
+  const watches = useWatchStore((s) => s.watches);
+  if (watches.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center px-6 text-center text-xs text-[var(--vela-fg-muted)]">
+        Clic derecho en una carpeta local → «Vigilar y subir cambios» para subir lo que modifiques mientras trabajas
+      </div>
+    );
+  }
+  return (
+    <div className="h-full overflow-auto">
+      {watches.map((w) => (
+        <div key={w.id} className="flex items-center gap-2 border-b border-[var(--vela-border)] px-3 py-1.5 text-xs">
+          <Radar size={13} className={w.error ? 'text-[var(--vela-warning)]' : 'text-[var(--vela-accent)]'} />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate" title={`${w.localDir} → ${w.siteName}:${w.remoteDir}`}>
+              {w.localDir} <span className="text-[var(--vela-fg-muted)]">→</span> {w.siteName}:{w.remoteDir}
+            </span>
+            <span className={`block truncate text-[10px] ${w.error ? 'text-[var(--vela-warning)]' : 'text-[var(--vela-fg-muted)]'}`}>
+              {w.error ?? (w.uploads > 0 ? `${w.uploads} ficheros subidos · último ${formatDate(w.lastUploadAt)}` : 'Esperando cambios')}
+            </span>
+          </span>
+          <button className="vf-btn py-1" onClick={() => stopWatch(w.id)}>
+            <Square size={11} /> Parar
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function BottomPanel({ height }: { height: number }) {
   const [tab, setTab] = useState<Tab>('queue');
   const jobsById = useQueueStore((s) => s.jobs);
   const order = useQueueStore((s) => s.order);
   const log = useQueueStore((s) => s.log);
   const clearLog = useQueueStore((s) => s.clearLog);
+  const watchCount = useWatchStore((s) => s.watches.length);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [followLog, setFollowLog] = useState(true);
   const showMenu = useContextMenu((s) => s.show);
@@ -144,7 +178,7 @@ export function BottomPanel({ height }: { height: number }) {
 
   const running = lists.queue.filter((j) => j.status === 'running');
   const totalSpeed = running.reduce((n, j) => n + j.speed, 0);
-  const current = tab === 'log' ? [] : lists[tab];
+  const current = tab === 'log' || tab === 'watch' ? [] : lists[tab];
 
   /** Trabajos de una ejecución anterior: reconectar al sitio y reanudar. */
   const resumeRestored = async (ids: string[]) => {
@@ -211,6 +245,7 @@ export function BottomPanel({ height }: { height: number }) {
           {tabButton('queue', 'Cola', lists.queue.length)}
           {tabButton('failed', 'Fallidas', lists.failed.length)}
           {tabButton('done', 'Completadas', lists.done.length)}
+          {tabButton('watch', 'Vigilancia', watchCount)}
           {tabButton('log', 'Registro')}
         </div>
         <div className="flex items-center gap-1">
@@ -247,7 +282,9 @@ export function BottomPanel({ height }: { height: number }) {
         </div>
       </div>
       <div className="min-h-0 flex-1" role="tabpanel">
-        {tab === 'log' ? (
+        {tab === 'watch' ? (
+          <WatchList />
+        ) : tab === 'log' ? (
           log.length === 0 ? (
             <div className="flex h-full items-center justify-center text-xs text-[var(--vela-fg-muted)]">Sin actividad de protocolo</div>
           ) : (

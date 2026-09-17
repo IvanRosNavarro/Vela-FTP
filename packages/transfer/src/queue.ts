@@ -1,4 +1,4 @@
-import { mkdir, readdir, stat } from 'node:fs/promises';
+import { mkdir, readdir, stat, utimes } from 'node:fs/promises';
 import path from 'node:path';
 import {
   RETRYABLE_ERRORS,
@@ -340,6 +340,11 @@ export class TransferQueue {
       onProgress: this.progressSink(state),
       signal: state.controller!.signal,
     });
+    // Conservar la fecha del origen: sin ella, comparar carpetas por fecha no sirve.
+    if (remote.modifiedAt !== null) {
+      const when = new Date(remote.modifiedAt);
+      await utimes(snap.localPath, when, when).catch(() => undefined);
+    }
     this.finish(state, 'done');
   }
 
@@ -367,6 +372,12 @@ export class TransferQueue {
       onProgress: this.progressSink(state),
       signal: state.controller!.signal,
     });
+    // Best-effort: muchos servidores FTP no admiten MFMT. Solo una conexión caída es un fallo.
+    if (local.modifiedAt !== null) {
+      await fs.setModifiedTime(snap.remotePath, local.modifiedAt).catch((err: unknown) => {
+        if (isBrokenConnection(err)) throw err;
+      });
+    }
     this.finish(state, 'done');
   }
 
