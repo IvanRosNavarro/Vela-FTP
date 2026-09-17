@@ -46,12 +46,17 @@ paquete para dos consumidores propios no compensa.
 
 ### Desarrollo en paralelo
 
-- `pnpm kit:link` enlaza la copia local del kit; un cambio en el kit se ve en
-  el siguiente build o recarga del consumidor, sin tag. Comprobado en Vela FTP.
-- `pnpm link` reescribe `pnpm-lock.yaml`. El CI falla si el lockfile llega con
+- `pnpm kit:link [ruta]` sustituye el enlace `node_modules/vela-kit` de cada
+  paquete consumidor por una junction a la copia local (por defecto
+  `../Vela Kit`). Un cambio en el kit se ve en el siguiente build o recarga,
+  sin tag. `pnpm kit:unlink` (o cualquier `pnpm install`) lo devuelve al tag.
+- No se usa `pnpm link`: reescribe `pnpm-lock.yaml` y `pnpm unlink` falla
+  dentro de un workspace. El CI conserva un guard por si un lockfile llega con
   `vela-kit` apuntando a `link:`.
 - El renderer añade la carpeta real del kit a `server.fs.allow` para que el
   dev server de Vite pueda servirla estando enlazada.
+- Probado en Vela FTP: con el kit enlazado un cambio aparece en el build; tras
+  `kit:unlink` el build vuelve al tag y el lockfile queda intacto.
 
 ## Reglas del kit
 

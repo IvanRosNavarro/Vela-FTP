@@ -33,8 +33,8 @@ importers:
         specifier: workspace:*
         version: link:../shared
       vela-kit:
-        specifier: link:../../../Vela Kit
-        version: link:../../../Vela Kit
+        specifier: github:IvanRosNavarro/Vela-Kit#v0.1.0
+        version: https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/e8916e81f25c5cd69db1af46f583fe0a7fbf032e(electron@42.11.4)
     devDependencies:
       '@types/node':
         specifier: 22.10.0
@@ -86,8 +86,8 @@ importers:
         specifier: 18.3.1
         version: 18.3.1(react@18.3.1)
       vela-kit:
-        specifier: link:../../../Vela Kit
-        version: link:../../../Vela Kit
+        specifier: github:IvanRosNavarro/Vela-Kit#v0.1.0
+        version: https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/e8916e81f25c5cd69db1af46f583fe0a7fbf032e(electron@42.11.4)
     devDependencies:
       '@types/react':
         specifier: 18.3.3
@@ -1298,6 +1298,19 @@ packages:
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
 
+  vela-kit@https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/e8916e81f25c5cd69db1af46f583fe0a7fbf032e:
+    resolution: {tarball: https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/e8916e81f25c5cd69db1af46f583fe0a7fbf032e}
+    version: 0.1.0
+    engines: {node: '>=22.0.0'}
+    peerDependencies:
+      electron: '>=42.0.0'
+      zod: ^4.0.0
+    peerDependenciesMeta:
+      electron:
+        optional: true
+      zod:
+        optional: true
+
   vite@6.4.3:
     resolution: {integrity: sha512-NTKlcQjlAK7MlQoyb6LgaqHc8sso/pVyUJYWMws3jg21uTJw/LddqIFPcPqP6PzpgbIcZyKI85sFE4HBrQDA8A==}
     engines: {node: ^18.0.0 || ^20.0.0 || >=22.0.0}
@@ -2475,6 +2488,10 @@ snapshots:
       picocolors: 1.1.1
 
   util-deprecate@1.0.2: {}
+
+  vela-kit@https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/e8916e81f25c5cd69db1af46f583fe0a7fbf032e(electron@42.11.4):
+    optionalDependencies:
+      electron: 42.11.4
 
   vite@6.4.3(@types/node@22.10.0)(jiti@1.21.7)(yaml@2.9.1):
     dependencies:

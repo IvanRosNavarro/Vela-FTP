@@ -19,7 +19,9 @@
     "build": "pnpm -r build",
     "dev": "concurrently --kill-others-on-fail --names \"renderer,preload,main,electron\" --prefix-colors \"cyan,yellow,magenta,green\" \"pnpm --filter @vela-ftp/renderer dev\" \"pnpm --filter @vela-ftp/preload dev\" \"pnpm --filter @vela-ftp/main dev\" \"pnpm run dev:electron\"",
     "dev:electron": "wait-on tcp:5183 file:packages/main/dist/index.js file:packages/preload/dist/index.js && electron .",
-    "clean": "pnpm -r --parallel clean && rimraf node_modules"
+    "clean": "pnpm -r --parallel clean && rimraf node_modules",
+    "kit:link": "node scripts/kit-link.mjs link",
+    "kit:unlink": "node scripts/kit-link.mjs unlink"
   },
   "devDependencies": {
     "@types/node": "22.10.0",

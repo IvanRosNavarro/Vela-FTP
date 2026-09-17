@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@vela-ftp/shared": "workspace:*",
-    "vela-kit": "link:../../../Vela Kit"
+    "vela-kit": "github:IvanRosNavarro/Vela-Kit#v0.1.0"
   },
   "devDependencies": {
     "@types/node": "22.10.0",

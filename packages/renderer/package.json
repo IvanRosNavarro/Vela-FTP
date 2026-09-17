@@ -14,7 +14,7 @@
     "@vela-ftp/shared": "workspace:*",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "vela-kit": "link:../../../Vela Kit"
+    "vela-kit": "github:IvanRosNavarro/Vela-Kit#v0.1.0"
   },
   "devDependencies": {
     "@types/react": "18.3.3",
