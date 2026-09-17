@@ -39,6 +39,7 @@ export function buildCommandRegistry(): CommandRegistry<CommandContext, CommandC
 
   registry.register(uiCommand('app.commandPalette', 'Paleta de comandos', 'app', 'open-palette', PALETTE_SHORTCUT));
   registry.register(uiCommand('app.settings', 'Ajustes', 'app', 'open-settings', 'Ctrl+,'));
+  registry.register(uiCommand('app.checkUpdates', 'Buscar actualizaciones', 'app', 'open-updates'));
   registry.register(uiCommand('site.new', 'Nuevo sitio', 'site', 'new-site', 'Ctrl+N'));
   registry.register(uiCommand('site.newProject', 'Nuevo proyecto', 'site', 'new-project'));
   registry.register(uiCommand('site.importFileZilla', 'Importar sitios de FileZilla', 'site', 'import-filezilla'));

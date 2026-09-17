@@ -111,6 +111,14 @@ const api: PreloadApi = {
     open: (options) => invoke(C.DIALOG_OPEN, options),
   },
 
+  updates: {
+    status: () => invoke(C.UPDATES_STATUS),
+    check: () => invoke(C.UPDATES_CHECK),
+    download: () => invoke(C.UPDATES_DOWNLOAD),
+    install: () => invoke(C.UPDATES_INSTALL),
+    openRelease: () => invoke(C.UPDATES_OPEN_RELEASE),
+  },
+
   on: (event, listener) => {
     if (!ALLOWED_EVENTS.has(event)) {
       throw new Error(`Evento no permitido: ${event}`);

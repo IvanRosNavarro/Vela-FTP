@@ -18,6 +18,7 @@ import type {
   SiteInput,
   TitleBarOverlayInput,
 } from './schemas';
+import type { UpdateStatus } from './updates';
 import type { ConflictDecision, JobSnapshot, RemoteEntry } from './transfer/types';
 
 export type Platform = 'win32' | 'darwin' | 'linux';
@@ -158,6 +159,16 @@ export interface DialogApi {
   open(options: { title: string; directory: boolean }): Promise<AppResponse<string | null>>;
 }
 
+export interface UpdatesApi {
+  status(): Promise<AppResponse<UpdateStatus>>;
+  check(): Promise<AppResponse<UpdateStatus>>;
+  download(): Promise<AppResponse<null>>;
+  /** Cierra la app e instala la versión descargada. */
+  install(): Promise<AppResponse<null>>;
+  /** Abre en el navegador la página de la release disponible. */
+  openRelease(): Promise<AppResponse<null>>;
+}
+
 export interface PreloadApi {
   platform: Platform;
   settings: SettingsApi;
@@ -173,6 +184,7 @@ export interface PreloadApi {
   local: LocalApi;
   queue: QueueApi;
   dialog: DialogApi;
+  updates: UpdatesApi;
   /** Suscribe a un evento push del main. Devuelve la función de baja. */
   on<E extends IpcEventName>(event: E, listener: (payload: MainEventPayloads[E]) => void): () => void;
 }

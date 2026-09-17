@@ -1,21 +1,24 @@
 import { useEffect, useState } from 'react';
-import { Keyboard, Palette, Shield, SlidersHorizontal, Trash2, X } from 'lucide-react';
-import { COMMAND_CATEGORY_LABELS, type CommandInfo, type ConflictPolicy, type KnownHostInfo } from '@vela-ftp/shared';
+import { Info, Keyboard, Palette, Shield, SlidersHorizontal, Trash2, X } from 'lucide-react';
+import { COMMAND_CATEGORY_LABELS, type CommandInfo, type ConflictPolicy, type KnownHostInfo, type UpdateStatus } from '@vela-ftp/shared';
 import { BUILTIN_THEMES } from 'vela-kit/theme';
 import { formatShortcut, shortcutFromKeyEvent, toast } from 'vela-kit/ui';
 import { AppError, call, errorText } from '../../lib/ipc';
 import { themeManager } from '../../theme';
 import { confirmDialog, useDialogStore } from '../../stores/dialogStore';
 import { useSitesStore } from '../../stores/sitesStore';
+import { checkForUpdates, downloadUpdate, installUpdate } from '../../lib/updates';
+import { useUpdatesStore } from '../../stores/updatesStore';
 import { Modal } from './Modal';
 
-type Section = 'general' | 'appearance' | 'shortcuts' | 'security';
+type Section = 'general' | 'appearance' | 'shortcuts' | 'security' | 'about';
 
 const SECTIONS: Array<{ id: Section; label: string; icon: typeof Palette }> = [
   { id: 'general', label: 'General', icon: SlidersHorizontal },
   { id: 'appearance', label: 'Apariencia', icon: Palette },
   { id: 'shortcuts', label: 'Atajos', icon: Keyboard },
   { id: 'security', label: 'Seguridad', icon: Shield },
+  { id: 'about', label: 'Acerca de', icon: Info },
 ];
 
 const POLICIES: Array<{ value: ConflictPolicy; label: string }> = [
@@ -252,6 +255,90 @@ function SecuritySection() {
   );
 }
 
+function updateMessage(status: UpdateStatus): string {
+  switch (status.phase) {
+    case 'unsupported':
+      return 'Las actualizaciones solo funcionan en la versión instalada.';
+    case 'idle':
+      return 'Aún no se ha comprobado si hay versiones nuevas.';
+    case 'checking':
+      return 'Buscando actualizaciones…';
+    case 'up-to-date':
+      return 'Tienes la última versión.';
+    case 'available':
+      return status.canInstall
+        ? `Vela FTP ${status.version} está disponible.`
+        : `Vela FTP ${status.version} está disponible. En macOS se instala a mano desde la página de descarga.`;
+    case 'downloading':
+      return `Descargando ${status.version}… ${status.percent}%`;
+    case 'downloaded':
+      return `Vela FTP ${status.version} está lista para instalar.`;
+    case 'error':
+      return `No se pudo completar: ${status.error ?? 'error desconocido'}`;
+  }
+}
+
+function AboutSection() {
+  const status = useUpdatesStore((s) => s.status);
+  const [autoCheck, setAutoCheck] = useState(true);
+  useEffect(() => {
+    void call(window.api.settings.get('updates:auto-check')).then(setAutoCheck).catch(() => undefined);
+  }, []);
+  const toggleAutoCheck = async (value: boolean) => {
+    setAutoCheck(value);
+    await call(window.api.settings.set('updates:auto-check', value)).catch((err) => {
+      setAutoCheck(!value);
+      toast(errorText(err), 'error');
+    });
+  };
+
+  const busy = status?.phase === 'checking' || status?.phase === 'downloading';
+  // Tras un error de descarga se conserva la versión: el botón vuelve a ofrecerla.
+  const offerDownload = !!status?.version && (status.phase === 'available' || status.phase === 'error');
+
+  return (
+    <div className="flex flex-col gap-5">
+      <section className="flex flex-col gap-1">
+        <h3 className="text-sm font-semibold">Vela FTP {__APP_VERSION__}</h3>
+        <p className="text-[11px] text-[var(--vela-fg-muted)]">Cliente FTP, FTPS y SFTP. Licencia GPL-3.0.</p>
+      </section>
+      <section className="flex flex-col gap-2">
+        <h3 className="vf-panel-title">Actualizaciones</h3>
+        {status && <p className="text-xs">{updateMessage(status)}</p>}
+        {status?.phase === 'downloading' && (
+          <div className="h-1.5 overflow-hidden rounded-full bg-[var(--vela-border)]">
+            <div className="h-full rounded-full bg-[var(--vela-accent)] transition-[width]" style={{ width: `${status.percent}%` }} />
+          </div>
+        )}
+        {status && status.phase !== 'unsupported' && (
+          <div className="flex flex-wrap gap-2">
+            {status.phase === 'downloaded' ? (
+              <button className="vf-btn-primary" onClick={() => void installUpdate()}>
+                Reiniciar e instalar
+              </button>
+            ) : offerDownload ? (
+              <button className="vf-btn-primary" onClick={() => downloadUpdate(status)}>
+                {status.canInstall ? 'Descargar' : 'Abrir la página de descarga'}
+              </button>
+            ) : (
+              <button className="vf-btn" disabled={busy} onClick={() => void checkForUpdates()}>
+                Buscar actualizaciones
+              </button>
+            )}
+          </div>
+        )}
+        <label className="mt-1 flex items-center gap-2 text-xs">
+          <input type="checkbox" checked={autoCheck} onChange={(e) => void toggleAutoCheck(e.target.checked)} />
+          Buscar actualizaciones automáticamente
+        </label>
+        <p className="text-[11px] text-[var(--vela-fg-muted)]">
+          Nunca se descarga nada sin que lo pidas. Una versión descargada se instala al cerrar Vela FTP o al pulsar «Reiniciar e instalar»; lo que quede en la cola se puede reanudar después.
+        </p>
+      </section>
+    </div>
+  );
+}
+
 export function SettingsDialog({ section = 'general', onClose }: { section?: Section; onClose: () => void }) {
   const [current, setCurrent] = useState<Section>(section);
   useEffect(() => {
@@ -280,6 +367,7 @@ export function SettingsDialog({ section = 'general', onClose }: { section?: Sec
           {current === 'appearance' && <AppearanceSection />}
           {current === 'shortcuts' && <ShortcutsSection />}
           {current === 'security' && <SecuritySection />}
+          {current === 'about' && <AboutSection />}
         </div>
       </div>
     </Modal>

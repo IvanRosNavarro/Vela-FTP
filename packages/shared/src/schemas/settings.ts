@@ -17,6 +17,8 @@ export const SETTING_SCHEMAS = {
   'local:last-path': z.string().min(1).max(4096),
   /** Atajos del usuario por id de comando: string = combinación, null = sin atajo. */
   'shortcuts:custom': z.record(z.string().max(100), z.string().max(50).nullable()),
+  /** Buscar actualizaciones al arrancar y cada pocas horas. */
+  'updates:auto-check': z.boolean(),
 } as const;
 
 export type SettingKey = keyof typeof SETTING_SCHEMAS;
@@ -30,6 +32,7 @@ export const SETTING_DEFAULTS: { [K in SettingKey]: SettingValue<K> } = {
   'ui:sidebar-width': 240,
   'local:last-path': '~',
   'shortcuts:custom': {},
+  'updates:auto-check': true,
 };
 
 const settingKeySchema = z.enum(Object.keys(SETTING_SCHEMAS) as [SettingKey, ...SettingKey[]]);

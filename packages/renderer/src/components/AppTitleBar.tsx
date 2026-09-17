@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
+import { ArrowDownCircle } from 'lucide-react';
 import { IPC_EVENTS } from '@vela-ftp/shared';
-import { TitleBar } from 'vela-kit/ui';
+import { NO_DRAG_STYLE, TitleBar } from 'vela-kit/ui';
+import { openUpdatesSettings } from '../lib/updates';
+import { useUpdatesStore } from '../stores/updatesStore';
 
 const PLATFORM = window.api.platform;
 
@@ -22,6 +25,30 @@ function useWindowMaximized(): boolean {
   return maximized;
 }
 
+/** Aviso persistente de versión nueva: el toast desaparece y este no. */
+function UpdateBadge() {
+  const status = useUpdatesStore((s) => s.status);
+  if (!status?.version) return null;
+  const label =
+    status.phase === 'downloaded'
+      ? 'Reiniciar para actualizar'
+      : status.phase === 'downloading'
+        ? `Descargando ${status.percent}%`
+        : status.phase === 'available'
+          ? `Versión ${status.version} disponible`
+          : null;
+  if (!label) return null;
+  return (
+    <button
+      style={NO_DRAG_STYLE}
+      onClick={openUpdatesSettings}
+      className="mx-2 flex items-center gap-1 rounded-full bg-[var(--vela-accent)] px-2 py-0.5 text-[10px] font-medium text-[var(--vela-accent-fg)] hover:brightness-110"
+    >
+      <ArrowDownCircle size={11} /> {label}
+    </button>
+  );
+}
+
 export function AppTitleBar() {
   const maximized = useWindowMaximized();
 
@@ -36,6 +63,7 @@ export function AppTitleBar() {
       }}
     >
       <span className="px-3 text-xs font-medium">Vela FTP</span>
+      <UpdateBadge />
     </TitleBar>
   );
 }
