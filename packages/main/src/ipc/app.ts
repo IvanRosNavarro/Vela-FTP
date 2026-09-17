@@ -17,6 +17,7 @@ import {
   remotePathInputSchema,
   remoteRenameInputSchema,
   resolveConflictInputSchema,
+  resumeJobsInputSchema,
   sessionIdInputSchema,
   sessionOpenInputSchema,
   siteIdInputSchema,
@@ -31,6 +32,7 @@ import {
 } from '@vela-ftp/shared';
 import { v7 as uuidv7 } from 'uuid';
 import type { SecretStore } from '../security/SecretStore';
+import { restoredSessionId } from '../storage/repositories/TransferJobsRepository';
 import type { SessionManager } from '../sessions/SessionManager';
 import type { KnownHostsRepository } from '../storage/repositories/KnownHostsRepository';
 import type { SitesRepository } from '../storage/repositories/SitesRepository';
@@ -219,7 +221,34 @@ export function registerAppHandlers(deps: AppIpcDeps): void {
   });
   handle(IPC_CHANNELS.QUEUE_CANCEL, jobIdsInputSchema, ({ jobIds }) => transfer.request('queue.cancel', { jobIds }));
   handle(IPC_CHANNELS.QUEUE_RETRY, jobIdsInputSchema, ({ jobIds }) => transfer.request('queue.retry', { jobIds }));
-  handle(IPC_CHANNELS.QUEUE_REMOVE, jobIdsInputSchema, ({ jobIds }) => transfer.request('queue.remove', { jobIds }));
+  handle(IPC_CHANNELS.QUEUE_REMOVE, jobIdsInputSchema, async ({ jobIds }) => {
+    queue.removeRestored(jobIds);
+    const live = jobIds.filter((id) => queue.get(id));
+    if (live.length > 0) await transfer.request('queue.remove', { jobIds: live });
+    return null;
+  });
+  handle(IPC_CHANNELS.QUEUE_RESUME, resumeJobsInputSchema, async ({ sessionId, jobIds }) => {
+    const session = sessions.get(sessionId);
+    if (!session) throw new TransferRequestError({ code: 'NOT_CONNECTED', message: 'La sesión no está abierta' });
+    const restored = jobIds
+      .map((id) => queue.get(id))
+      .filter((j): j is NonNullable<typeof j> => !!j && j.sessionId === restoredSessionId(session.siteId));
+    if (restored.length === 0) return [];
+    // Reanudar: lo ya transferido se aprovecha si el destino es un trozo del origen.
+    const jobs: TransferJob[] = restored.map((j) => ({
+      id: uuidv7(),
+      sessionId,
+      direction: j.direction,
+      localPath: j.localPath,
+      remotePath: j.remotePath,
+      isDirectory: j.isDirectory,
+      conflictPolicy: 'resume',
+      parentId: null,
+    }));
+    await transfer.request('queue.enqueue', { jobs });
+    queue.removeRestored(restored.map((j) => j.id));
+    return jobs.map((j) => j.id);
+  });
   handle(IPC_CHANNELS.QUEUE_RESOLVE_CONFLICT, resolveConflictInputSchema, (input) => transfer.request('queue.resolveConflict', input));
   handle(IPC_CHANNELS.QUEUE_SNAPSHOT, null, () => queue.snapshot());
 

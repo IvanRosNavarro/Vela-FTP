@@ -98,6 +98,8 @@ export interface QueueApi {
   remove(jobIds: string[]): Promise<AppResponse<null>>;
   resolveConflict(jobId: string, decision: ConflictDecision, applyToAll: boolean): Promise<AppResponse<null>>;
   snapshot(): Promise<AppResponse<JobSnapshot[]>>;
+  /** Reencola en `sessionId`, reanudando, trabajos recuperados al abrir la app. Devuelve los ids nuevos. */
+  resume(sessionId: string, jobIds: string[]): Promise<AppResponse<string[]>>;
 }
 
 export interface DialogApi {

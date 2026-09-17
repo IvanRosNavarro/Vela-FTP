@@ -50,6 +50,7 @@ export const IPC_CHANNELS = {
   QUEUE_REMOVE: 'queue:remove',
   QUEUE_RESOLVE_CONFLICT: 'queue:resolve-conflict',
   QUEUE_SNAPSHOT: 'queue:snapshot',
+  QUEUE_RESUME: 'queue:resume',
 
   DIALOG_OPEN: 'dialog:open',
 } as const;

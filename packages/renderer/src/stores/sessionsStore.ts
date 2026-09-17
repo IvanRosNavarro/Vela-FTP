@@ -13,6 +13,8 @@ interface SessionsState {
   connecting: string | null;
   connect(siteId: string): Promise<void>;
   disconnect(sessionId: string): Promise<void>;
+  /** Sesión abierta del sitio, conectando si no hay ninguna. null si el usuario cancela o falla. */
+  ensureSession(siteId: string): Promise<string | null>;
   activate(sessionId: string): void;
   /** La conexión se cayó: se quita la sesión del estado local. */
   markLost(sessionId: string): void;
@@ -89,6 +91,13 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       // Si el motor ya no la tenía, se quita igual.
     }
     get().markLost(sessionId);
+  },
+
+  async ensureSession(siteId) {
+    const existing = get().sessions.find((s) => s.siteId === siteId);
+    if (existing) return existing.sessionId;
+    await get().connect(siteId);
+    return get().sessions.find((s) => s.siteId === siteId)?.sessionId ?? null;
   },
 
   activate: (sessionId) => set({ activeId: sessionId }),

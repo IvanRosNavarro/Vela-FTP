@@ -15,11 +15,13 @@ import { closeStorage, initStorage } from './storage/db';
 import { KnownHostsRepository } from './storage/repositories/KnownHostsRepository';
 import { SettingsRepository } from './storage/repositories/SettingsRepository';
 import { SitesRepository } from './storage/repositories/SitesRepository';
+import { TransferJobsRepository } from './storage/repositories/TransferJobsRepository';
 import { QueueMirror } from './transfer/QueueMirror';
 import { TransferHost } from './transfer/TransferHost';
 import { createMainWindow } from './window/mainWindow';
 
 let transfer: TransferHost | null = null;
+let queue: QueueMirror | null = null;
 
 app.setName('Vela FTP');
 app.setAppUserModelId('com.vela.ftp');
@@ -80,8 +82,12 @@ if (!app.requestSingleInstanceLock()) {
 
     transfer = new TransferHost();
     transfer.start();
-    const queue = new QueueMirror(transfer);
     const sessions = new SessionManager(transfer, sites, knownHosts);
+    queue = new QueueMirror({
+      transfer,
+      repo: new TransferJobsRepository(db),
+      siteIdForSession: (sessionId) => sessions.get(sessionId)?.siteId ?? null,
+    });
 
     registerSettingsHandlers(settings);
     registerWindowHandlers();
@@ -112,6 +118,7 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.on('will-quit', () => {
+    queue?.persist();
     transfer?.stop();
     closeStorage();
   });

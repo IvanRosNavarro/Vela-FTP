@@ -60,6 +60,9 @@ export const enqueueInputSchema = z.object({
 export type EnqueueInput = z.output<typeof enqueueInputSchema>;
 
 export const jobIdsInputSchema = z.object({ jobIds });
+
+/** Reanuda en una sesión abierta trabajos recuperados de una ejecución anterior. */
+export const resumeJobsInputSchema = z.object({ sessionId, jobIds });
 export const resolveConflictInputSchema = z.object({
   jobId: z.string().max(200),
   decision: z.enum(['overwrite', 'overwrite-if-newer', 'resume', 'rename', 'skip']),
