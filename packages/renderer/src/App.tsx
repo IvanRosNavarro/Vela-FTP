@@ -19,6 +19,8 @@ import { runCommandAction } from './lib/commandActions';
 import { createUpdateNotifier } from './lib/updates';
 import { useUpdatesStore } from './stores/updatesStore';
 import { useWatchStore } from './stores/watchStore';
+import { useSyncStore } from './stores/syncStore';
+import { useDialogStore } from './stores/dialogStore';
 
 async function readSetting<K extends 'ui:bottom-panel-height' | 'ui:sidebar-width' | 'local:last-path'>(key: K) {
   const res = await window.api.settings.get(key);
@@ -82,6 +84,15 @@ export function App() {
     };
     void call(window.api.updates.status()).then(applyUpdateStatus).catch(() => undefined);
     void call(window.api.watch.list()).then(useWatchStore.getState().setWatches).catch(() => undefined);
+    void useSyncStore.getState().load();
+    // Bienvenida solo la primera vez, y nunca por encima de datos que ya existen.
+    void (async () => {
+      const seen = await call(window.api.settings.get('app:welcomed')).catch(() => true);
+      if (seen) return;
+      const sites = await call(window.api.sites.list()).catch(() => [null]);
+      await call(window.api.settings.set('app:welcomed', true)).catch(() => undefined);
+      if (sites.length === 0) useDialogStore.getState().open({ kind: 'welcome' });
+    })();
 
     void (async () => {
       const [width, height, lastLocal] = await Promise.all([
@@ -115,6 +126,22 @@ export function App() {
       window.api.on(IPC_EVENTS.COMMAND_ACTION, ({ action }) => runCommandAction(action)),
       window.api.on(IPC_EVENTS.UPDATES_CHANGED, applyUpdateStatus),
       window.api.on(IPC_EVENTS.WATCHES_CHANGED, (list) => useWatchStore.getState().setWatches(list)),
+      window.api.on(IPC_EVENTS.SYNC_CHANGED, (status) => {
+        const previous = useSyncStore.getState().status;
+        useSyncStore.getState().setStatus(status);
+        // El enlace del correo llega al proceso main: hay que pedir la contraseña aquí.
+        if (status.phase === 'needs-password' && previous?.phase !== 'needs-password') {
+          toast('Dispositivo vinculado: introduce tu contraseña de sincronización', 'info', () =>
+            useDialogStore.getState().open({ kind: 'settings', section: 'sync' }),
+          );
+        }
+      }),
+      window.api.on(IPC_EVENTS.SYNC_DATA_CHANGED, () => {
+        const sitesStore = useSitesStore.getState();
+        void sitesStore.loadSites();
+        void sitesStore.loadProjects();
+        void sitesStore.loadBookmarks();
+      }),
       window.api.on(IPC_EVENTS.VAULT_CHANGED, () => void useSitesStore.getState().loadVault()),
       window.api.on(IPC_EVENTS.QUEUE_UPDATED, ({ jobs, removedIds }) => queue.applyUpdate(jobs, removedIds)),
       window.api.on(IPC_EVENTS.QUEUE_CONFLICT, (info) => queue.addConflict(info)),

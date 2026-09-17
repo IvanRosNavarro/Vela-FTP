@@ -68,8 +68,8 @@ importers:
         specifier: 14.0.2
         version: 14.0.2
       vela-kit:
-        specifier: github:IvanRosNavarro/Vela-Kit#v0.4.0
-        version: https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/4169837870391d3ce48dc5416eb8becbb2438a6a(electron@42.11.4)(react@18.3.1)(zod@4.4.3)(zustand@4.5.7(@types/react@18.3.3)(react@18.3.1))
+        specifier: github:IvanRosNavarro/Vela-Kit#v0.5.0
+        version: https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/ac3c7eb359cf6431197c3d206f3992d2a7cc83b6(electron@42.11.4)(react@18.3.1)(zod@4.4.3)(zustand@4.5.7(@types/react@18.3.3)(react@18.3.1))
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -136,8 +136,8 @@ importers:
         specifier: 2.3.1
         version: 2.3.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       vela-kit:
-        specifier: github:IvanRosNavarro/Vela-Kit#v0.4.0
-        version: https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/4169837870391d3ce48dc5416eb8becbb2438a6a(electron@42.11.4)(react@18.3.1)(zod@4.4.3)(zustand@4.5.7(@types/react@18.3.3)(react@18.3.1))
+        specifier: github:IvanRosNavarro/Vela-Kit#v0.5.0
+        version: https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/ac3c7eb359cf6431197c3d206f3992d2a7cc83b6(electron@42.11.4)(react@18.3.1)(zod@4.4.3)(zustand@4.5.7(@types/react@18.3.3)(react@18.3.1))
       zustand:
         specifier: 4.5.7
         version: 4.5.7(@types/react@18.3.3)(react@18.3.1)
@@ -176,8 +176,8 @@ importers:
   packages/shared:
     dependencies:
       vela-kit:
-        specifier: github:IvanRosNavarro/Vela-Kit#v0.4.0
-        version: https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/4169837870391d3ce48dc5416eb8becbb2438a6a(electron@42.11.4)(react@18.3.1)(zod@4.4.3)(zustand@4.5.7(@types/react@18.3.3)(react@18.3.1))
+        specifier: github:IvanRosNavarro/Vela-Kit#v0.5.0
+        version: https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/ac3c7eb359cf6431197c3d206f3992d2a7cc83b6(electron@42.11.4)(react@18.3.1)(zod@4.4.3)(zustand@4.5.7(@types/react@18.3.3)(react@18.3.1))
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -2310,9 +2310,9 @@ packages:
     resolution: {integrity: sha512-xZe/16rV4aa+HGSOCiY2YeLT1OybRLrrkL/Rqaq7p7GMVXjFh+6wN4oMYgjFmnSnhY8t6Xpdl2l9qmnHYuMHwQ==}
     hasBin: true
 
-  vela-kit@https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/4169837870391d3ce48dc5416eb8becbb2438a6a:
-    resolution: {tarball: https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/4169837870391d3ce48dc5416eb8becbb2438a6a}
-    version: 0.4.0
+  vela-kit@https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/ac3c7eb359cf6431197c3d206f3992d2a7cc83b6:
+    resolution: {tarball: https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/ac3c7eb359cf6431197c3d206f3992d2a7cc83b6}
+    version: 0.5.0
     engines: {node: '>=22.0.0'}
     peerDependencies:
       electron: '>=42.0.0'
@@ -4707,7 +4707,7 @@ snapshots:
 
   uuid@14.0.2: {}
 
-  vela-kit@https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/4169837870391d3ce48dc5416eb8becbb2438a6a(electron@42.11.4)(react@18.3.1)(zod@4.4.3)(zustand@4.5.7(@types/react@18.3.3)(react@18.3.1)):
+  vela-kit@https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/ac3c7eb359cf6431197c3d206f3992d2a7cc83b6(electron@42.11.4)(react@18.3.1)(zod@4.4.3)(zustand@4.5.7(@types/react@18.3.3)(react@18.3.1)):
     optionalDependencies:
       electron: 42.11.4
       react: 18.3.1

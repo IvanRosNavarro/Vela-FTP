@@ -6,6 +6,7 @@ import {
   type SettingValue,
 } from '@vela-ftp/shared';
 import { logger } from 'vela-kit/logger';
+import { emitEntity } from '../../sync/emit';
 
 interface SettingRow {
   value: string;
@@ -43,5 +44,49 @@ export class SettingsRepository {
          ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
       )
       .run(key, JSON.stringify(parsed), this.now());
+    if (!LOCAL_ONLY_SETTINGS.has(key)) emitEntity('ftp.setting', key, { key, value: parsed, updatedAt: this.now() }, this.now());
+  }
+
+  // ── Sincronización ─────────────────────────────────────────────────────────
+
+  syncUpdatedAt(key: string): number | null {
+    const row = this.db.prepare('SELECT updated_at FROM settings WHERE key = ?').get(key) as { updated_at: number } | undefined;
+    return row?.updated_at ?? null;
+  }
+
+  /** Ajuste recibido de otro dispositivo: se valida antes de guardarlo. */
+  syncUpsert(key: string, value: unknown, updatedAt: number): boolean {
+    if (!(key in SETTING_SCHEMAS) || LOCAL_ONLY_SETTINGS.has(key)) return false;
+    const parsed = SETTING_SCHEMAS[key as SettingKey].safeParse(value);
+    if (!parsed.success) {
+      logger.warn(`[sync] ajuste ${key} con valor no válido; descartado`);
+      return false;
+    }
+    this.db
+      .prepare(
+        `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+      )
+      .run(key, JSON.stringify(parsed.data), updatedAt);
+    return true;
+  }
+
+  /** Todas las claves guardadas que sí viajan. */
+  syncableKeys(): SettingKey[] {
+    return (this.db.prepare('SELECT key FROM settings').all() as Array<{ key: string }>)
+      .map((r) => r.key)
+      .filter((key): key is SettingKey => key in SETTING_SCHEMAS && !LOCAL_ONLY_SETTINGS.has(key));
   }
 }
+
+/**
+ * Ajustes que son de este equipo y no viajan: rutas locales y el tamaño de los
+ * paneles de esta pantalla.
+ */
+const LOCAL_ONLY_SETTINGS = new Set<string>([
+  'local:last-path',
+  'ui:sidebar-width',
+  'ui:bottom-panel-height',
+  'updates:auto-check',
+  'app:welcomed',
+]);

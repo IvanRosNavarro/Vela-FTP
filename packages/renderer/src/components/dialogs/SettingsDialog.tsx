@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Info, Keyboard, Palette, Shield, SlidersHorizontal, Trash2, X } from 'lucide-react';
+import { Info, Keyboard, Palette, RefreshCw, Shield, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import { COMMAND_CATEGORY_LABELS, type CommandInfo, type ConflictPolicy, type KnownHostInfo, type UpdateStatus } from '@vela-ftp/shared';
 import { BUILTIN_THEMES } from 'vela-kit/theme';
 import { formatShortcut, shortcutFromKeyEvent, toast } from 'vela-kit/ui';
@@ -9,15 +9,17 @@ import { confirmDialog, useDialogStore } from '../../stores/dialogStore';
 import { useSitesStore } from '../../stores/sitesStore';
 import { checkForUpdates, downloadUpdate, installUpdate } from '../../lib/updates';
 import { useUpdatesStore } from '../../stores/updatesStore';
+import { SyncSection } from './SyncSection';
 import { Modal } from './Modal';
 
-type Section = 'general' | 'appearance' | 'shortcuts' | 'security' | 'about';
+type Section = 'general' | 'appearance' | 'shortcuts' | 'security' | 'sync' | 'about';
 
 const SECTIONS: Array<{ id: Section; label: string; icon: typeof Palette }> = [
   { id: 'general', label: 'General', icon: SlidersHorizontal },
   { id: 'appearance', label: 'Apariencia', icon: Palette },
   { id: 'shortcuts', label: 'Atajos', icon: Keyboard },
   { id: 'security', label: 'Seguridad', icon: Shield },
+  { id: 'sync', label: 'Sincronización', icon: RefreshCw },
   { id: 'about', label: 'Acerca de', icon: Info },
 ];
 
@@ -367,6 +369,7 @@ export function SettingsDialog({ section = 'general', onClose }: { section?: Sec
           {current === 'appearance' && <AppearanceSection />}
           {current === 'shortcuts' && <ShortcutsSection />}
           {current === 'security' && <SecuritySection />}
+          {current === 'sync' && <SyncSection />}
           {current === 'about' && <AboutSection />}
         </div>
       </div>

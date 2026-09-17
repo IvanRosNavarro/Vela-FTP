@@ -3,6 +3,7 @@ import type { BaseIpcErrorCode } from 'vela-kit/ipc';
 import type { CommandAction } from './commands';
 import type { UpdateStatus } from './updates';
 import type { WatchInfo } from './schemas/watch';
+import type { SyncStatus } from './schemas/sync';
 import type { ConflictInfo, JobSnapshot, ProtocolLogLine, TransferError, TransferErrorCode } from './transfer/types';
 
 export const IPC_CHANNELS = {
@@ -90,6 +91,13 @@ export const IPC_CHANNELS = {
   EDITOR_SAVE: 'editor:save',
   EDITOR_SET_DIRTY: 'editor:set-dirty',
   EDITOR_CLOSE: 'editor:close',
+  SYNC_STATUS: 'sync:status',
+  SYNC_REQUEST_LINK: 'sync:request-link',
+  SYNC_ACTIVATE: 'sync:activate',
+  SYNC_DEACTIVATE: 'sync:deactivate',
+  SYNC_NOW: 'sync:now',
+  SYNC_SET_CATEGORIES: 'sync:set-categories',
+
   WATCH_LIST: 'watch:list',
   WATCH_START: 'watch:start',
   WATCH_STOP: 'watch:stop',
@@ -118,6 +126,9 @@ export const IPC_EVENTS = {
   /** El usuario quiere cerrar un editor con cambios sin guardar. */
   EDITOR_CLOSE_REQUESTED: 'state:editor-close-requested',
   WATCHES_CHANGED: 'state:watches-changed',
+  SYNC_CHANGED: 'state:sync-changed',
+  /** La sincronización ha traído datos nuevos: el renderer recarga sitios y marcadores. */
+  SYNC_DATA_CHANGED: 'state:sync-data-changed',
 } as const;
 
 export type IpcEventName = (typeof IPC_EVENTS)[keyof typeof IPC_EVENTS];
@@ -137,6 +148,8 @@ export interface MainEventPayloads {
   [IPC_EVENTS.UPDATES_CHANGED]: UpdateStatus;
   [IPC_EVENTS.EDITOR_CLOSE_REQUESTED]: null;
   [IPC_EVENTS.WATCHES_CHANGED]: WatchInfo[];
+  [IPC_EVENTS.SYNC_CHANGED]: SyncStatus;
+  [IPC_EVENTS.SYNC_DATA_CHANGED]: null;
 }
 
 /** Códigos de error que el renderer puede recibir en un `IpcResponse`. */
