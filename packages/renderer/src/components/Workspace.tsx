@@ -1,9 +1,9 @@
-import { useState } from 'react';
 import { Plug, Plus, Unplug, X } from 'lucide-react';
 import { useDialogStore } from '../stores/dialogStore';
 import { remotePaneKey } from '../stores/panesStore';
 import { useSessionsStore } from '../stores/sessionsStore';
 import { useSitesStore } from '../stores/sitesStore';
+import { useUiStore } from '../stores/uiStore';
 import { FilePane } from './panes/FilePane';
 
 function RemotePlaceholder() {
@@ -35,7 +35,8 @@ export function Workspace() {
   const activeId = useSessionsStore((s) => s.activeId);
   const activate = useSessionsStore((s) => s.activate);
   const disconnect = useSessionsStore((s) => s.disconnect);
-  const [focused, setFocused] = useState<'local' | 'remote'>('local');
+  const focused = useUiStore((s) => s.focusedPane);
+  const setFocused = useUiStore((s) => s.setFocusedPane);
 
   return (
     <main id="vela-content" className="flex min-h-0 min-w-0 flex-1 flex-col">

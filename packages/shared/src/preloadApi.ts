@@ -1,7 +1,14 @@
 import type { IpcResponse } from 'vela-kit/ipc';
 import type { AppErrorCode, IpcEventName, MainEventPayloads } from './ipc-channels';
+import type { CommandInfo } from './commands';
 import type {
+  Bookmark,
+  BookmarkInput,
   EnqueueInput,
+  FileZillaPreview,
+  PathVisit,
+  Project,
+  ProjectInput,
   LocalEntry,
   LocalRoot,
   SessionInfo,
@@ -39,6 +46,48 @@ export interface SitesApi {
   delete(id: string): Promise<AppResponse<null>>;
   duplicate(id: string): Promise<AppResponse<Site>>;
   move(id: string, beforeId: string | null, afterId: string | null): Promise<AppResponse<Site>>;
+  /** Mueve a otro proyecto (null = ninguno) entre dos vecinos de ese grupo. */
+  relocate(id: string, projectId: string | null, beforeId: string | null, afterId: string | null): Promise<AppResponse<Site>>;
+}
+
+export interface ProjectsApi {
+  list(): Promise<AppResponse<Project[]>>;
+  create(input: ProjectInput): Promise<AppResponse<Project>>;
+  update(id: string, patch: { name?: string; color?: string | null; collapsed?: boolean }): Promise<AppResponse<Project>>;
+  delete(id: string): Promise<AppResponse<null>>;
+  move(id: string, beforeId: string | null, afterId: string | null): Promise<AppResponse<Project>>;
+}
+
+export interface BookmarksApi {
+  list(): Promise<AppResponse<Bookmark[]>>;
+  create(input: BookmarkInput): Promise<AppResponse<Bookmark>>;
+  update(id: string, patch: { name?: string; localPath?: string | null }): Promise<AppResponse<Bookmark>>;
+  delete(id: string): Promise<AppResponse<null>>;
+  history(siteId: string, limit: number): Promise<AppResponse<PathVisit[]>>;
+}
+
+export interface KnownHostInfo {
+  host: string;
+  port: number;
+  fingerprint: string;
+  keyType: string | null;
+  addedAt: number;
+}
+
+export interface CommandsApi {
+  list(): Promise<AppResponse<CommandInfo[]>>;
+  execute(id: string): Promise<AppResponse<null>>;
+  /** Devuelve la lista actualizada. INVALID_INPUT con `details.message` si no se puede. */
+  setShortcut(commandId: string, combo: string | null): Promise<AppResponse<CommandInfo[]>>;
+  resetShortcuts(): Promise<AppResponse<CommandInfo[]>>;
+  /** Suspende los atajos de esta ventana (mientras se captura uno nuevo). */
+  suspendShortcuts(suspended: boolean): Promise<AppResponse<null>>;
+}
+
+export interface ImportApi {
+  /** `path` null = ubicación por defecto de FileZilla. */
+  previewFileZilla(path: string | null): Promise<AppResponse<FileZillaPreview>>;
+  applyFileZilla(path: string, keys: string[]): Promise<AppResponse<{ created: number }>>;
 }
 
 export interface VaultStatusInfo {
@@ -66,6 +115,8 @@ export interface SessionsApi {
   open(siteId: string): Promise<AppResponse<SessionInfo>>;
   close(sessionId: string): Promise<AppResponse<null>>;
   trust(input: TrustInput): Promise<AppResponse<null>>;
+  knownHosts(): Promise<AppResponse<KnownHostInfo[]>>;
+  forget(host: string, port: number, fingerprint: string): Promise<AppResponse<null>>;
 }
 
 export interface RemoteApi {
@@ -112,6 +163,10 @@ export interface PreloadApi {
   settings: SettingsApi;
   window: WindowApi;
   sites: SitesApi;
+  projects: ProjectsApi;
+  bookmarks: BookmarksApi;
+  commands: CommandsApi;
+  import: ImportApi;
   vault: VaultApi;
   sessions: SessionsApi;
   remote: RemoteApi;

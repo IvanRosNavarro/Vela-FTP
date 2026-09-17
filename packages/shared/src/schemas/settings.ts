@@ -15,6 +15,8 @@ export const SETTING_SCHEMAS = {
   'ui:sidebar-width': z.number().int().min(160).max(600),
   /** Última carpeta del panel local. */
   'local:last-path': z.string().min(1).max(4096),
+  /** Atajos del usuario por id de comando: string = combinación, null = sin atajo. */
+  'shortcuts:custom': z.record(z.string().max(100), z.string().max(50).nullable()),
 } as const;
 
 export type SettingKey = keyof typeof SETTING_SCHEMAS;
@@ -27,6 +29,7 @@ export const SETTING_DEFAULTS: { [K in SettingKey]: SettingValue<K> } = {
   'ui:bottom-panel-height': 220,
   'ui:sidebar-width': 240,
   'local:last-path': '~',
+  'shortcuts:custom': {},
 };
 
 const settingKeySchema = z.enum(Object.keys(SETTING_SCHEMAS) as [SettingKey, ...SettingKey[]]);

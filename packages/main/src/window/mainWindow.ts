@@ -6,6 +6,7 @@ import { attachShortcuts } from 'vela-kit/commands';
 import { logger } from 'vela-kit/logger';
 import { resolveTheme } from 'vela-kit/theme/themes';
 import { titleBarWindowOptions, watchMaximized, type DesktopPlatform } from 'vela-kit/window';
+import { suspendedShortcutWindows } from '../commands';
 import { DEV_SERVER_ORIGIN } from '../ipc/guard';
 import { APP_URL } from '../protocol/appProtocol';
 
@@ -69,9 +70,13 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
     if (!win.isDestroyed()) win.webContents.send(IPC_EVENTS.WINDOW_MAXIMIZED_CHANGED, { maximized });
   });
   const detachShortcuts = attachShortcuts(options.getShortcuts, win.webContents, () => (win.isDestroyed() ? null : win.id), {
+    // Mientras se captura un atajo en ajustes, las teclas llegan a la página.
+    passThrough: (_input, windowId) => suspendedShortcutWindows.has(windowId),
     onError: (source, err) => logger.warn(`[shortcuts] ${source} falló`, err),
   });
+  const windowId = win.id;
   win.on('closed', () => {
+    suspendedShortcutWindows.delete(windowId);
     stopWatching();
     detachShortcuts();
   });

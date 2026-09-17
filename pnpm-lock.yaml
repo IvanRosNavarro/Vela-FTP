@@ -51,6 +51,9 @@ importers:
       '@vela-ftp/shared':
         specifier: workspace:*
         version: link:../shared
+      fast-xml-parser:
+        specifier: 5.11.1
+        version: 5.11.1
       fractional-indexing:
         specifier: 3.2.0
         version: 3.2.0
@@ -58,8 +61,8 @@ importers:
         specifier: 14.0.2
         version: 14.0.2
       vela-kit:
-        specifier: github:IvanRosNavarro/Vela-Kit#v0.3.0
-        version: https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/60b8427562c92186217b0a0f0390350840527c7d(electron@42.11.4)(react@18.3.1)(zod@4.4.3)(zustand@4.5.7(@types/react@18.3.3)(react@18.3.1))
+        specifier: github:IvanRosNavarro/Vela-Kit#v0.4.0
+        version: https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/4169837870391d3ce48dc5416eb8becbb2438a6a(electron@42.11.4)(react@18.3.1)(zod@4.4.3)(zustand@4.5.7(@types/react@18.3.3)(react@18.3.1))
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -123,8 +126,8 @@ importers:
         specifier: 2.3.1
         version: 2.3.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       vela-kit:
-        specifier: github:IvanRosNavarro/Vela-Kit#v0.3.0
-        version: https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/60b8427562c92186217b0a0f0390350840527c7d(electron@42.11.4)(react@18.3.1)(zod@4.4.3)(zustand@4.5.7(@types/react@18.3.3)(react@18.3.1))
+        specifier: github:IvanRosNavarro/Vela-Kit#v0.4.0
+        version: https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/4169837870391d3ce48dc5416eb8becbb2438a6a(electron@42.11.4)(react@18.3.1)(zod@4.4.3)(zustand@4.5.7(@types/react@18.3.3)(react@18.3.1))
       zustand:
         specifier: 4.5.7
         version: 4.5.7(@types/react@18.3.3)(react@18.3.1)
@@ -163,8 +166,8 @@ importers:
   packages/shared:
     dependencies:
       vela-kit:
-        specifier: github:IvanRosNavarro/Vela-Kit#v0.3.0
-        version: https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/60b8427562c92186217b0a0f0390350840527c7d(electron@42.11.4)(react@18.3.1)(zod@4.4.3)(zustand@4.5.7(@types/react@18.3.3)(react@18.3.1))
+        specifier: github:IvanRosNavarro/Vela-Kit#v0.4.0
+        version: https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/4169837870391d3ce48dc5416eb8becbb2438a6a(electron@42.11.4)(react@18.3.1)(zod@4.4.3)(zustand@4.5.7(@types/react@18.3.3)(react@18.3.1))
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -552,6 +555,9 @@ packages:
     resolution: {integrity: sha512-X5XaVWZIBCT7HHZGm5I7ZQXDwLG+bGXuSrMQAW+7Zvl87h1kmc1ZB1VSRJcpUfoUrGQp4Fkoxm5kZ+Ms+aW+eA==}
     engines: {node: '>= 20.19.0'}
 
+  '@nodable/entities@3.0.0':
+    resolution: {integrity: sha512-8L9xFeTYKhm49xfIypoe2W5wV1m/3Z58kT+7kR9A8OyFxcPduI4VmxaUMQyKYrRjUoLLSXv6EKKID5Tvj9cUVw==}
+
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
     engines: {node: '>= 8'}
@@ -874,6 +880,9 @@ packages:
   anymatch@3.1.3:
     resolution: {integrity: sha512-KMReFUr0B4t+D+OBkjR3KYqvocp2XaSzO55UcB6mgQMd3KbcE+mWTyvVV7D/zsdEbNnV6acZUutkiHQXvTr1Rw==}
     engines: {node: '>= 8'}
+
+  anynum@1.0.1:
+    resolution: {integrity: sha512-N6//FLET/tXYNM/F6ABca1oH6fWB+KlTt909Le28WMDBk8oaT4vY17DCrwg2MvmuqUKt3Ni4N5dGJ/EoBgcO6A==}
 
   app-builder-lib@26.15.3:
     resolution: {integrity: sha512-2VnyWkqsP5v5XbBhL3tD5Syx8iNPBYsoU7kY4S2fz7wg8Rj/nztWKCUzGKaFRTv0Xwf3/H058CR1Kvtd/3lRow==}
@@ -1279,6 +1288,13 @@ packages:
   fast-uri@3.1.8:
     resolution: {integrity: sha512-GZMtZUTNRpOVIECoXwLNZS5xUGE+mVNbTB8h/7Rwh2TFWcBQiPzTgyZi05BF9UMZKkLJv8XBRJTlU7zg8+ZfMg==}
 
+  fast-xml-builder@1.3.1:
+    resolution: {integrity: sha512-pIM/1n3ntFXKYrUZwW7QCK0gAW7XY+wzj1YMIV3tLDvPj/V+zTGJK5e3/4WJfwj0qWw2ElNXiTixda/R+3YSug==}
+
+  fast-xml-parser@5.11.1:
+    resolution: {integrity: sha512-TBw6K/fxoQGGjCmZDw9w/ZwP3uDcnTM4YH/g+PFRWr8sbe5idXtxNN6vITh4+1ruCZaho6uBFurElsA7F0zzgw==}
+    hasBin: true
+
   fastq@1.20.3:
     resolution: {integrity: sha512-XKv5nnLs6nLF71NgiKJLIZFLkPyIEuOselLG7ujZnGrRfQK8HpvY+WqKhAJUAdLomwVHErVS4LfxFlPq0/FTAw==}
 
@@ -1485,6 +1501,9 @@ packages:
   is-number@7.0.0:
     resolution: {integrity: sha512-41Cifkg6e8TylSpdtTpeLVMqvSBEVzTttHvERD741+pnZ8ANv0004MRL43QKPDlK9cGvNp6NZWZUBlbGXYxxng==}
     engines: {node: '>=0.12.0'}
+
+  is-unsafe@2.0.2:
+    resolution: {integrity: sha512-HgbIHPBH0KHHCcjLfGsCvhtPTVxjaAZlXjwdz7/GQC40SjSe4sfQsar8J5VFo8JOSbarkpV0OLG95bbaNd9aAQ==}
 
   isarray@1.0.0:
     resolution: {integrity: sha512-VLghIWNM6ELQzo7zwmcg0NmTVyWKYjvIeM83yjp0wRDTmUnrM678fQbcKBo6n2CJEF0szoG//ytg+TKla89ALQ==}
@@ -1751,6 +1770,10 @@ packages:
 
   package-json-from-dist@1.0.1:
     resolution: {integrity: sha512-UEZIS3/by4OC8vL3P2dTXRETpebLI2NiI5vIrjaD/5UtrkFX/tNbwjTSRAGC/+7CAo2pIcBaRgWmcBBHcsaCIw==}
+
+  path-expression-matcher@1.6.2:
+    resolution: {integrity: sha512-enSlaiat05iasnzmgNxRj8reFdj3puY2QpNgP1aPIaVfT6nn9ICuPoFlKHk8EN22HcwewshO+mN2DGbkCEOtqQ==}
+    engines: {node: '>=14.0.0'}
 
   path-is-absolute@1.0.1:
     resolution: {integrity: sha512-AVbw3UJ2e9bq64vSaS9Am0fje1Pa8pbGqTTsmXfaIiMpnr5DlDhfJOuLj9Sf95ZPVDAUerDfEk88MPmPe7UCQg==}
@@ -2092,6 +2115,9 @@ packages:
     resolution: {integrity: sha512-yDPMNjp4WyfYBkHnjIRLfca1i6KMyGCtsVgoKe/z1+6vukgaENdgGBZt+ZmKPc4gavvEZ5OgHfHdrazhgNyG7w==}
     engines: {node: '>=12'}
 
+  strnum@2.4.2:
+    resolution: {integrity: sha512-rDG3Ah4TV0k1hWvLSzkZtMmLN9+eS+h3knq4MP6A42Y3Yh5qGNnOUs1jJkoSr8FG5dsL28c7KgkIBzSEykqtuw==}
+
   sucrase@3.35.1:
     resolution: {integrity: sha512-DhuTmvZWux4H1UOnWMB3sk0sbaCVOoQZjv8u1rDoTV0HTdGem9hkAZtl4JZy8P2z4Bg0nT+YMeOFyVr4zcG5Tw==}
     engines: {node: '>=16 || 14 >=14.17'}
@@ -2239,9 +2265,9 @@ packages:
     resolution: {integrity: sha512-xZe/16rV4aa+HGSOCiY2YeLT1OybRLrrkL/Rqaq7p7GMVXjFh+6wN4oMYgjFmnSnhY8t6Xpdl2l9qmnHYuMHwQ==}
     hasBin: true
 
-  vela-kit@https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/60b8427562c92186217b0a0f0390350840527c7d:
-    resolution: {tarball: https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/60b8427562c92186217b0a0f0390350840527c7d}
-    version: 0.3.0
+  vela-kit@https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/4169837870391d3ce48dc5416eb8becbb2438a6a:
+    resolution: {tarball: https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/4169837870391d3ce48dc5416eb8becbb2438a6a}
+    version: 0.4.0
     engines: {node: '>=22.0.0'}
     peerDependencies:
       electron: '>=42.0.0'
@@ -2377,6 +2403,10 @@ packages:
 
   wrappy@1.0.2:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
+
+  xml-naming@0.3.0:
+    resolution: {integrity: sha512-ghig2TBE/H11aOVgmahA3MhimvkBr6JIYknH/Dhdk10nXwdbIqBJsbfMxpvFPG8bAw77gN29aQWvKpmVoPlvPQ==}
+    engines: {node: '>=16.0.0'}
 
   xmlbuilder@15.1.1:
     resolution: {integrity: sha512-yMqGBqtXyeN1e3TGYvgNgDVZ3j84W4cwkOXQswghol6APgZWaff9lnbvN7MHYJOiXsvGPXtjTYJEiC9J2wv9Eg==}
@@ -2779,6 +2809,8 @@ snapshots:
 
   '@noble/hashes@2.4.0': {}
 
+  '@nodable/entities@3.0.0': {}
+
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
       '@nodelib/fs.stat': 2.0.5
@@ -3091,6 +3123,8 @@ snapshots:
     dependencies:
       normalize-path: 3.0.0
       picomatch: 2.3.2
+
+  anynum@1.0.1: {}
 
   app-builder-lib@26.15.3(dmg-builder@26.15.3)(electron-builder-squirrel-windows@26.15.3):
     dependencies:
@@ -3602,6 +3636,20 @@ snapshots:
 
   fast-uri@3.1.8: {}
 
+  fast-xml-builder@1.3.1:
+    dependencies:
+      path-expression-matcher: 1.6.2
+      xml-naming: 0.3.0
+
+  fast-xml-parser@5.11.1:
+    dependencies:
+      '@nodable/entities': 3.0.0
+      fast-xml-builder: 1.3.1
+      is-unsafe: 2.0.2
+      path-expression-matcher: 1.6.2
+      strnum: 2.4.2
+      xml-naming: 0.3.0
+
   fastq@1.20.3:
     dependencies:
       reusify: 1.1.0
@@ -3841,6 +3889,8 @@ snapshots:
 
   is-number@7.0.0: {}
 
+  is-unsafe@2.0.2: {}
+
   isarray@1.0.0: {}
 
   isbinaryfile@4.0.10: {}
@@ -4064,6 +4114,8 @@ snapshots:
       yocto-queue: 0.1.0
 
   package-json-from-dist@1.0.1: {}
+
+  path-expression-matcher@1.6.2: {}
 
   path-is-absolute@1.0.1: {}
 
@@ -4407,6 +4459,10 @@ snapshots:
     dependencies:
       ansi-regex: 6.3.0
 
+  strnum@2.4.2:
+    dependencies:
+      anynum: 1.0.1
+
   sucrase@3.35.1:
     dependencies:
       '@jridgewell/gen-mapping': 0.3.13
@@ -4567,7 +4623,7 @@ snapshots:
 
   uuid@14.0.2: {}
 
-  vela-kit@https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/60b8427562c92186217b0a0f0390350840527c7d(electron@42.11.4)(react@18.3.1)(zod@4.4.3)(zustand@4.5.7(@types/react@18.3.3)(react@18.3.1)):
+  vela-kit@https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/4169837870391d3ce48dc5416eb8becbb2438a6a(electron@42.11.4)(react@18.3.1)(zod@4.4.3)(zustand@4.5.7(@types/react@18.3.3)(react@18.3.1)):
     optionalDependencies:
       electron: 42.11.4
       react: 18.3.1
@@ -4705,6 +4761,8 @@ snapshots:
       strip-ansi: 7.2.0
 
   wrappy@1.0.2: {}
+
+  xml-naming@0.3.0: {}
 
   xmlbuilder@15.1.1: {}
 

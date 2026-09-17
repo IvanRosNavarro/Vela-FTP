@@ -32,6 +32,12 @@ export default defineConfig({
     // node_modules y habría dos React (hooks rotos) y dos stores de zustand.
     dedupe: ['react', 'react-dom', 'zustand'],
   },
+  // vela-kit es TypeScript fuente: preempaquetarlo deja en caché la versión
+  // del tag y, al enlazar la copia local o subir de tag, se sirven exports
+  // viejos ("does not provide an export named …").
+  optimizeDeps: {
+    exclude: ['vela-kit'],
+  },
   server: {
     // 5173 es el de Vela Browser.
     port: 5183,

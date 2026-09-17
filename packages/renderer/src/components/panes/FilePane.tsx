@@ -14,6 +14,7 @@ import {
   Link2,
   Lock,
   Pencil,
+  Star,
   RefreshCw,
   Trash2,
   Upload,
@@ -29,7 +30,10 @@ import { writeClipboardText } from '../../lib/clipboard';
 import { confirmDialog, promptDialog, useDialogStore } from '../../stores/dialogStore';
 import { remotePaneKey, sortEntries, usePanesStore, type PaneKey, type SortKey } from '../../stores/panesStore';
 import { useSessionsStore } from '../../stores/sessionsStore';
+import { useSitesStore } from '../../stores/sitesStore';
+import { addBookmarkFor } from '../../lib/bookmarks';
 import { useContextMenu, type MenuItem } from '../ContextMenu';
+import { PathInput } from './PathInput';
 
 const ROW_HEIGHT = 24;
 const DRAG_MIME = 'application/x-vela-ftp-entries';
@@ -107,14 +111,14 @@ export function FilePane({ paneKey, sessionId, focused, onFocus }: FilePaneProps
   const ops: PathOps = isRemote ? remotePaths : localPaths(window.api.local.separator);
   const listRef = useListRef(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [pathInput, setPathInput] = useState(pane?.path ?? '');
   const [roots, setRoots] = useState<LocalRoot[]>([]);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [dragOverPane, setDragOverPane] = useState(false);
   const showMenu = useContextMenu((s) => s.show);
   const activeSession = useSessionsStore((s) => s.sessions.find((x) => x.sessionId === s.activeId) ?? null);
+  const paneSiteId = useSessionsStore((s) => (sessionId ? s.sessions.find((x) => x.sessionId === sessionId)?.siteId : undefined));
+  const isBookmarked = useSitesStore((s) => !!pane && !!paneSiteId && s.bookmarks.some((b) => b.siteId === paneSiteId && b.remotePath === pane.path));
 
-  useEffect(() => setPathInput(pane?.path ?? ''), [pane?.path]);
 
   useEffect(() => {
     if (isRemote) return;
@@ -456,17 +460,16 @@ export function FilePane({ paneKey, sessionId, focused, onFocus }: FilePaneProps
             ))}
           </select>
         )}
-        <input
-          id={isRemote ? 'vela-remote-path' : 'vela-local-path'}
-          className="vf-input flex-1 py-1 font-mono"
-          value={pathInput}
-          spellCheck={false}
-          onChange={(e) => setPathInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && pathInput.trim()) navigate(pathInput.trim());
-            if (e.key === 'Escape') setPathInput(pane.path);
-          }}
-        />
+        <PathInput paneKey={paneKey} path={pane.path} siteId={isRemote ? (paneSiteId ?? null) : (activeSession?.siteId ?? null)} onNavigate={navigate} />
+        {isRemote && sessionId && paneSiteId && (
+          <button
+            className={`vf-icon-btn ${isBookmarked ? 'text-[var(--vela-accent)]' : ''}`}
+            title={isBookmarked ? 'Carpeta en marcadores' : 'Añadir marcador (Ctrl+D)'}
+            onClick={() => void addBookmarkFor(paneSiteId, pane.path)}
+          >
+            <Star size={14} fill={isBookmarked ? 'currentColor' : 'none'} />
+          </button>
+        )}
         <button className="vf-icon-btn" title="Nueva carpeta" onClick={() => void mkdir()}>
           <FolderPlus size={14} />
         </button>

@@ -1,5 +1,6 @@
 // Canales IPC renderer → main. Patrón: `{dominio}:{accion}`.
 import type { BaseIpcErrorCode } from 'vela-kit/ipc';
+import type { CommandAction } from './commands';
 import type { ConflictInfo, JobSnapshot, ProtocolLogLine, TransferError, TransferErrorCode } from './transfer/types';
 
 export const IPC_CHANNELS = {
@@ -18,8 +19,33 @@ export const IPC_CHANNELS = {
   SITES_DELETE: 'sites:delete',
   SITES_DUPLICATE: 'sites:duplicate',
   SITES_MOVE: 'sites:move',
+  SITES_RELOCATE: 'sites:relocate',
+
+  PROJECTS_LIST: 'projects:list',
+  PROJECTS_CREATE: 'projects:create',
+  PROJECTS_UPDATE: 'projects:update',
+  PROJECTS_DELETE: 'projects:delete',
+  PROJECTS_MOVE: 'projects:move',
+
+  BOOKMARKS_LIST: 'bookmarks:list',
+  BOOKMARKS_CREATE: 'bookmarks:create',
+  BOOKMARKS_UPDATE: 'bookmarks:update',
+  BOOKMARKS_DELETE: 'bookmarks:delete',
+
+  HISTORY_LIST: 'history:list',
+
+  COMMANDS_LIST: 'commands:list',
+  COMMANDS_EXECUTE: 'commands:execute',
+  SHORTCUTS_SET: 'shortcuts:set',
+  SHORTCUTS_RESET: 'shortcuts:reset',
+  SHORTCUTS_SUSPEND: 'shortcuts:suspend',
+
+  IMPORT_FILEZILLA_PREVIEW: 'import:filezilla-preview',
+  IMPORT_FILEZILLA_APPLY: 'import:filezilla-apply',
 
   KNOWN_HOSTS_TRUST: 'known-hosts:trust',
+  KNOWN_HOSTS_LIST: 'known-hosts:list',
+  KNOWN_HOSTS_REMOVE: 'known-hosts:remove',
 
   VAULT_STATUS: 'vault:status',
   VAULT_UNLOCK: 'vault:unlock',
@@ -65,6 +91,9 @@ export const IPC_EVENTS = {
   PROTOCOL_LOG: 'state:protocol-log',
   SESSION_LOST: 'state:session-lost',
   TRANSFER_RESTARTED: 'state:transfer-restarted',
+  PROJECTS_CHANGED: 'state:projects-changed',
+  BOOKMARKS_CHANGED: 'state:bookmarks-changed',
+  COMMAND_ACTION: 'state:command-action',
 } as const;
 
 export type IpcEventName = (typeof IPC_EVENTS)[keyof typeof IPC_EVENTS];
@@ -78,6 +107,9 @@ export interface MainEventPayloads {
   [IPC_EVENTS.PROTOCOL_LOG]: ProtocolLogLine[];
   [IPC_EVENTS.SESSION_LOST]: { sessionId: string; error: TransferError };
   [IPC_EVENTS.TRANSFER_RESTARTED]: null;
+  [IPC_EVENTS.PROJECTS_CHANGED]: null;
+  [IPC_EVENTS.BOOKMARKS_CHANGED]: null;
+  [IPC_EVENTS.COMMAND_ACTION]: { action: CommandAction };
 }
 
 /** Códigos de error que el renderer puede recibir en un `IpcResponse`. */

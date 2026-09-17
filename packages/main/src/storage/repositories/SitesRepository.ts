@@ -21,6 +21,7 @@ interface SiteRow {
   initial_local_path: string | null;
   max_connections: number;
   notes: string;
+  project_id: string | null;
   position: string;
   created_at: number;
   updated_at: number;
@@ -48,6 +49,7 @@ function toSite(row: SiteRow): Site {
     initialLocalPath: row.initial_local_path,
     maxConnections: row.max_connections,
     notes: row.notes,
+    projectId: row.project_id,
     position: row.position,
     hasPassword: row.has_password === 1,
     hasPassphrase: row.has_passphrase === 1,
@@ -73,10 +75,10 @@ export class SitesRepository {
     return toSite(row);
   }
 
-  private lastPosition(): string | null {
-    const row = this.db.prepare('SELECT position FROM sites ORDER BY position COLLATE BINARY DESC LIMIT 1').get() as
-      | { position: string }
-      | undefined;
+  private lastPosition(projectId: string | null): string | null {
+    const row = this.db
+      .prepare('SELECT position FROM sites WHERE project_id IS ? ORDER BY position COLLATE BINARY DESC LIMIT 1')
+      .get(projectId) as { position: string } | undefined;
     return row?.position ?? null;
   }
 
@@ -87,8 +89,8 @@ export class SitesRepository {
       this.db
         .prepare(
           `INSERT INTO sites (id, name, protocol, host, port, username, auth, key_path, initial_remote_path,
-             initial_local_path, max_connections, notes, position, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             initial_local_path, max_connections, notes, project_id, position, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           id,
@@ -103,7 +105,8 @@ export class SitesRepository {
           input.initialLocalPath,
           input.maxConnections,
           input.notes,
-          generateKeyBetween(this.lastPosition(), null),
+          input.projectId ?? null,
+          generateKeyBetween(this.lastPosition(input.projectId ?? null), null),
           now,
           now,
         );
@@ -113,12 +116,13 @@ export class SitesRepository {
   }
 
   update(id: string, input: SiteInput): Site {
-    this.get(id);
+    const current = this.get(id);
+    const projectId = input.projectId === undefined ? current.projectId : input.projectId;
     transaction(this.db, () => {
       this.db
         .prepare(
           `UPDATE sites SET name = ?, protocol = ?, host = ?, port = ?, username = ?, auth = ?, key_path = ?,
-             initial_remote_path = ?, initial_local_path = ?, max_connections = ?, notes = ?, updated_at = ?
+             initial_remote_path = ?, initial_local_path = ?, max_connections = ?, notes = ?, project_id = ?, updated_at = ?
            WHERE id = ?`,
         )
         .run(
@@ -133,6 +137,7 @@ export class SitesRepository {
           input.initialLocalPath,
           input.maxConnections,
           input.notes,
+          projectId,
           this.now(),
           id,
         );
@@ -175,14 +180,25 @@ export class SitesRepository {
     const site = this.get(id);
     const password = site.hasPassword ? this.getSecret(id, 'password') : null;
     const passphrase = site.hasPassphrase ? this.getSecret(id, 'passphrase') : null;
-    return this.create({ ...site, name: `${site.name} (copia)`, password, passphrase });
+    return this.create({ ...site, name: `${site.name} (copia)`, projectId: site.projectId, password, passphrase });
   }
 
-  /** Coloca el sitio entre dos vecinos (ids de la lista ya ordenada). */
-  move(id: string, beforeId: string | null, afterId: string | null): Site {
-    const before = beforeId ? this.get(beforeId).position : null;
+  /**
+   * Coloca el sitio en un proyecto (o en ninguno) entre dos vecinos de ese
+   * grupo. Sin vecinos, va al final del grupo.
+   */
+  relocate(id: string, projectId: string | null, beforeId: string | null, afterId: string | null): Site {
+    this.get(id);
+    const before = beforeId ? this.get(beforeId).position : afterId ? null : this.lastPosition(projectId);
     const after = afterId ? this.get(afterId).position : null;
-    this.db.prepare('UPDATE sites SET position = ?, updated_at = ? WHERE id = ?').run(generateKeyBetween(before, after), this.now(), id);
+    this.db
+      .prepare('UPDATE sites SET project_id = ?, position = ?, updated_at = ? WHERE id = ?')
+      .run(projectId, generateKeyBetween(before, after), this.now(), id);
     return this.get(id);
+  }
+
+  /** Compatibilidad: mover dentro del mismo proyecto. */
+  move(id: string, beforeId: string | null, afterId: string | null): Site {
+    return this.relocate(id, this.get(id).projectId, beforeId, afterId);
   }
 }

@@ -24,6 +24,8 @@ export const siteInputSchema = z
     initialLocalPath: z.string().max(4096).nullable(),
     maxConnections: z.number().int().min(1).max(10),
     notes: z.string().max(4000),
+    /** undefined al editar = no cambiar de proyecto. */
+    projectId: z.string().min(1).max(100).nullable().optional(),
     password: secretField,
     passphrase: secretField,
   })
@@ -54,6 +56,7 @@ export interface Site {
   initialLocalPath: string | null;
   maxConnections: number;
   notes: string;
+  projectId: string | null;
   position: string;
   /** Los secretos nunca salen de main; solo si existen. */
   hasPassword: boolean;

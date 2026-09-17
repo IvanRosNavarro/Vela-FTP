@@ -1,7 +1,5 @@
 # Pendientes y deuda técnica
 
-- Selector de tema provisional en la sidebar (`ThemeSelect.tsx`) → sustituir
-  por ajustes y Command Palette (Fase 2).
 - Title bar sin probar en macOS ni Linux (solo Windows en local; el CI compila
   en los tres).
 - Firma de código: Authenticode (Windows) y notarización (macOS) cuando haya

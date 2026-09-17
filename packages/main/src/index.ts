@@ -1,8 +1,9 @@
 import path from 'node:path';
 import { app, BrowserWindow, Menu, nativeTheme } from 'electron';
-import { ShortcutTable, registerCommandShortcuts } from 'vela-kit/commands';
 import { initLogger, logger } from 'vela-kit/logger';
-import { buildCommandRegistry } from './commands';
+import { ShortcutManager, buildCommandRegistry } from './commands';
+import { registerOrganizeHandlers } from './ipc/organize';
+import { BookmarksRepository, PathHistoryRepository, ProjectsRepository } from './storage/repositories/ProjectsRepository';
 import { DEV_SERVER_ORIGIN } from './ipc/guard';
 import { registerSettingsHandlers } from './ipc/settings';
 import { registerWindowHandlers } from './ipc/window';
@@ -91,20 +92,20 @@ if (!app.requestSingleInstanceLock()) {
 
     registerSettingsHandlers(settings);
     registerWindowHandlers();
-    registerAppHandlers({ sites, knownHosts, secrets, sessions, transfer, queue });
+    const projects = new ProjectsRepository(db);
+    const bookmarks = new BookmarksRepository(db);
+    const history = new PathHistoryRepository(db);
+    registerAppHandlers({ sites, knownHosts, secrets, sessions, transfer, queue, history });
 
     const registry = buildCommandRegistry();
-    const shortcuts = new ShortcutTable({ reserved: ['Ctrl+Shift+P'] });
-    registerCommandShortcuts(shortcuts, registry, {
-      buildContext: (windowId) => ({ windowId }),
-      onConflict: (combo, id) => logger.warn(`[shortcuts] "${combo}" de ${id} ignorado por conflicto`),
-    });
+    const shortcuts = new ShortcutManager(registry, settings);
+    registerOrganizeHandlers({ sites, projects, bookmarks, history, knownHosts, settings, registry, shortcuts });
 
     const openWindow = () =>
       createMainWindow({
         themeId: settings.get('ui:theme'),
         prefersDark: nativeTheme.shouldUseDarkColors,
-        getShortcuts: () => shortcuts,
+        getShortcuts: () => shortcuts.current,
       });
     openWindow();
 
