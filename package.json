@@ -46,7 +46,8 @@
       "esbuild"
     ],
     "overrides": {
-      "electron-builder-squirrel-windows": "26.15.3"
+      "electron-builder-squirrel-windows": "26.15.3",
+      "dompurify@<3.4.13": "3.4.13"
     }
   },
   "dependencies": {

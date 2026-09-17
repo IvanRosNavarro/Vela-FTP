@@ -4,7 +4,10 @@ import type { CommandInfo } from './commands';
 import type {
   Bookmark,
   BookmarkInput,
+  EditorDocument,
+  EditorSaveResult,
   EnqueueInput,
+  FilePreview,
   FileZillaPreview,
   PathVisit,
   Project,
@@ -17,6 +20,7 @@ import type {
   Site,
   SiteInput,
   TitleBarOverlayInput,
+  WatchInfo,
 } from './schemas';
 import type { UpdateStatus } from './updates';
 import type { ConflictDecision, JobSnapshot, RemoteEntry } from './transfer/types';
@@ -159,6 +163,30 @@ export interface DialogApi {
   open(options: { title: string; directory: boolean }): Promise<AppResponse<string | null>>;
 }
 
+export interface FilesApi {
+  /** Abre el fichero remoto en una ventana de edición. */
+  editRemote(sessionId: string, path: string): Promise<AppResponse<null>>;
+  previewRemote(sessionId: string, path: string): Promise<AppResponse<FilePreview>>;
+  previewLocal(path: string): Promise<AppResponse<FilePreview>>;
+  /** Compara un fichero remoto con uno local en una ventana de diff. */
+  diff(sessionId: string, remotePath: string, localPath: string): Promise<AppResponse<null>>;
+}
+
+export interface WatchApi {
+  list(): Promise<AppResponse<WatchInfo[]>>;
+  /** Sube a `remoteDir` lo que se cree o cambie en `localDir` mientras dure la vigilancia. */
+  start(sessionId: string, localDir: string, remoteDir: string): Promise<AppResponse<WatchInfo>>;
+  stop(id: string): Promise<AppResponse<null>>;
+}
+
+export interface EditorApi {
+  load(id: string): Promise<AppResponse<EditorDocument>>;
+  save(id: string, content: string, force: boolean): Promise<AppResponse<EditorSaveResult>>;
+  setDirty(id: string, dirty: boolean): Promise<AppResponse<null>>;
+  /** Cierra la ventana descartando los cambios. */
+  close(id: string): Promise<AppResponse<null>>;
+}
+
 export interface UpdatesApi {
   status(): Promise<AppResponse<UpdateStatus>>;
   check(): Promise<AppResponse<UpdateStatus>>;
@@ -185,6 +213,9 @@ export interface PreloadApi {
   queue: QueueApi;
   dialog: DialogApi;
   updates: UpdatesApi;
+  files: FilesApi;
+  editor: EditorApi;
+  watch: WatchApi;
   /** Suscribe a un evento push del main. Devuelve la función de baja. */
   on<E extends IpcEventName>(event: E, listener: (payload: MainEventPayloads[E]) => void): () => void;
 }

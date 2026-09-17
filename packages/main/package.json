@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@vela-ftp/shared": "workspace:*",
+    "chokidar": "5.0.0",
     "fast-xml-parser": "5.11.1",
     "fractional-indexing": "3.2.0",
     "uuid": "14.0.2",

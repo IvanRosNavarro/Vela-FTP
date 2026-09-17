@@ -109,6 +109,24 @@ describe('TransferEngine', () => {
     expect(await readFile(path.join(local, 'tree-copia', 'raiz.txt'), 'utf8')).toBe('r');
   });
 
+  it('conserva la fecha de modificación al subir y al bajar', async () => {
+    const past = new Date('2024-03-05T10:20:30Z');
+    const source = path.join(local, 'fecha.txt');
+    await writeFile(source, 'con fecha');
+    await utimes(source, past, past);
+
+    const up = job({ direction: 'upload', localPath: source, remotePath: '/fecha.txt' });
+    h.engine.queue.enqueue([up]);
+    await h.waitFor(finished(up.id));
+    expect((await stat(path.join(root, 'fecha.txt'))).mtime.getTime()).toBe(past.getTime());
+
+    const back = path.join(local, 'fecha-bajada.txt');
+    const down = job({ direction: 'download', localPath: back, remotePath: '/fecha.txt' });
+    h.engine.queue.enqueue([down]);
+    await h.waitFor(finished(down.id));
+    expect((await stat(back)).mtime.getTime()).toBe(past.getTime());
+  });
+
   it('una carpeta local inexistente no deja rastro en el servidor', async () => {
     const ghost = job({ direction: 'upload', localPath: path.join(local, 'no-existe'), remotePath: '/fantasma', isDirectory: true });
     h.engine.queue.enqueue([ghost]);
@@ -197,6 +215,7 @@ describe('TransferEngine', () => {
         deleteFile: async () => undefined,
         deleteDir: async () => undefined,
         chmod: async () => undefined,
+        setModifiedTime: async () => false,
         realpath: async (p) => p,
         download: async () => undefined,
         upload: (_l, _r, opts) =>
@@ -239,6 +258,34 @@ describe('TransferEngine', () => {
     } finally {
       slow.dispose();
     }
+  });
+
+  it('baja y sube ficheros sueltos detectando cambios en el servidor', async () => {
+    await writeFile(path.join(root, 'editar.txt'), 'versión 1');
+    const copy = path.join(local, 'editar.txt');
+
+    await expect(h.engine.call('file.fetch', { sessionId: 's1', path: '/editar.txt', localPath: copy, maxBytes: 3 })).rejects.toMatchObject({ code: 'TOO_LARGE' });
+    await expect(h.engine.call('file.fetch', { sessionId: 's1', path: '/no-existe.txt', localPath: copy, maxBytes: 1000 })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+    const opened = await h.engine.call('file.fetch', { sessionId: 's1', path: '/editar.txt', localPath: copy, maxBytes: 1000 });
+    expect(await readFile(copy, 'utf8')).toBe('versión 1');
+
+    await writeFile(copy, 'versión 2 local');
+    const expected = { size: opened.size, modifiedAt: opened.modifiedAt };
+    const saved = await h.engine.call('file.store', { sessionId: 's1', localPath: copy, path: '/editar.txt', expected });
+    expect(await readFile(path.join(root, 'editar.txt'), 'utf8')).toBe('versión 2 local');
+    expect(saved?.size).toBe(Buffer.byteLength('versión 2 local'));
+
+    // Otro cliente lo cambia: guardar con lo que teníamos debe fallar.
+    await writeFile(path.join(root, 'editar.txt'), 'cambio ajeno, más largo que antes');
+    await writeFile(copy, 'versión 3 local');
+    const stale = { size: saved!.size, modifiedAt: saved!.modifiedAt };
+    await expect(h.engine.call('file.store', { sessionId: 's1', localPath: copy, path: '/editar.txt', expected: stale })).rejects.toMatchObject({ code: 'REMOTE_CHANGED' });
+    expect(await readFile(path.join(root, 'editar.txt'), 'utf8')).toBe('cambio ajeno, más largo que antes');
+
+    // Forzar (sin expected) sobrescribe.
+    await h.engine.call('file.store', { sessionId: 's1', localPath: copy, path: '/editar.txt', expected: null });
+    expect(await readFile(path.join(root, 'editar.txt'), 'utf8')).toBe('versión 3 local');
   });
 
   it('cerrar la sesión deja lo pendiente como interrumpido', async () => {

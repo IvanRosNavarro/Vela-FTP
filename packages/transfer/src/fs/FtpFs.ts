@@ -52,6 +52,8 @@ function typeOf(info: FileInfo): RemoteEntry['type'] {
 }
 
 export class FtpFs implements RemoteFs {
+  /** FEAT del servidor, leído la primera vez que hace falta. */
+  private features: Map<string, string> | null = null;
   readonly protocol;
   private client: Client | null = null;
   private lostListener: ((error: Error) => void) | null = null;
@@ -209,6 +211,20 @@ export class FtpFs implements RemoteFs {
   async deleteDir(path: string): Promise<void> {
     try {
       await this.c.removeDir(path);
+    } catch (err) {
+      throw mapFtpError(err);
+    }
+  }
+
+  async setModifiedTime(path: string, time: number): Promise<boolean> {
+    try {
+      this.features ??= await this.c.features();
+      if (!this.features.has('MFMT')) return false;
+      const d = new Date(time);
+      const p = (n: number) => String(n).padStart(2, '0');
+      const stamp = `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`;
+      await this.c.send(`MFMT ${stamp} ${await this.c.protectWhitespace(path)}`);
+      return true;
     } catch (err) {
       throw mapFtpError(err);
     }

@@ -3,6 +3,7 @@ import type { AppErrorCode, IpcEventName, MainEventPayloads } from '@vela-ftp/sh
 import { NotFoundError, fail, ok, validatePayload, type IpcResponse } from 'vela-kit/ipc';
 import { logger } from 'vela-kit/logger';
 import type { z } from 'zod';
+import { BinaryFileError } from '../files/EditorManager';
 import { InvalidMasterPasswordError, KeychainUnavailableError, VaultLockedError } from '../security/SecretStore';
 import { TransferRequestError } from '../transfer/TransferHost';
 import { isTrustedSender } from './guard';
@@ -13,6 +14,7 @@ export type AppIpcResponse<T> = IpcResponse<T, AppErrorCode>;
 export function toErrorResponse(err: unknown, channel: string): AppIpcResponse<never> {
   if (err instanceof TransferRequestError) return fail(err.info.code, err.info);
   if (err instanceof VaultLockedError) return fail('VAULT_LOCKED');
+  if (err instanceof BinaryFileError) return fail('BINARY_FILE', { name: err.fileName });
   if (err instanceof InvalidMasterPasswordError) return fail('INVALID_MASTER_PASSWORD');
   if (err instanceof KeychainUnavailableError) return fail('KEYCHAIN_UNAVAILABLE');
   if (err instanceof NotFoundError) return fail('NOT_FOUND', { entity: err.entity, id: err.id });

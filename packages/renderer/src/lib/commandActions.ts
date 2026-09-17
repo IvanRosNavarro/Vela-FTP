@@ -9,6 +9,7 @@ import { ACTIVE_STATUSES, FAILED_STATUSES, useQueueStore } from '../stores/queue
 import { useSessionsStore } from '../stores/sessionsStore';
 import { useUiStore } from '../stores/uiStore';
 import { checkForUpdates, openUpdatesSettings } from './updates';
+import { toggleSyncBrowsing } from './syncBrowsing';
 
 /** Panel con el foco; si es el remoto y no hay sesión, el local. */
 function focusedPaneKey(): PaneKey {
@@ -71,6 +72,12 @@ export function runCommandAction(action: CommandAction): void {
     case 'refresh':
       void panes.refresh('local');
       if (sessions.activeId) void panes.refresh(remotePaneKey(sessions.activeId));
+      return;
+    case 'toggle-compare':
+      useUiStore.getState().toggleCompare();
+      return;
+    case 'toggle-sync-browsing':
+      toggleSyncBrowsing();
       return;
     case 'open-updates':
       openUpdatesSettings();

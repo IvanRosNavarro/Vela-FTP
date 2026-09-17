@@ -6,6 +6,10 @@ import {
   Download,
   Eye,
   EyeOff,
+  FileCode,
+  GitCompareArrows,
+  Radar,
+  ScanEye,
   ExternalLink,
   File,
   Folder,
@@ -22,6 +26,7 @@ import {
 import { List, useListRef, type RowComponentProps } from 'react-window';
 import type { LocalRoot, RemoteEntry } from '@vela-ftp/shared';
 import { toast } from 'vela-kit/ui';
+import type { CompareStatus } from '../../lib/compare';
 import { formatDate, formatMode, formatSize } from '../../lib/format';
 import { call, errorText } from '../../lib/ipc';
 import { isValidName, localPaths, remotePaths, type PathOps } from '../../lib/paths';
@@ -31,6 +36,7 @@ import { confirmDialog, promptDialog, useDialogStore } from '../../stores/dialog
 import { remotePaneKey, sortEntries, usePanesStore, type PaneKey, type SortKey } from '../../stores/panesStore';
 import { useSessionsStore } from '../../stores/sessionsStore';
 import { useSitesStore } from '../../stores/sitesStore';
+import { startWatch } from '../../stores/watchStore';
 import { addBookmarkFor } from '../../lib/bookmarks';
 import { useContextMenu, type MenuItem } from '../ContextMenu';
 import { PathInput } from './PathInput';
@@ -50,10 +56,28 @@ export interface FilePaneProps {
   sessionId: string | null;
   focused: boolean;
   onFocus: () => void;
+  /** Estado de cada nombre frente al otro panel, con la comparación activa. */
+  compare?: Map<string, CompareStatus> | null;
 }
+
+/** Fondo de fila por estado de comparación; `older` y `same` no se marcan. */
+export const COMPARE_COLORS: Partial<Record<CompareStatus, string>> = {
+  only: 'color-mix(in srgb, var(--vela-warning) 22%, transparent)',
+  newer: 'color-mix(in srgb, var(--vela-success) 22%, transparent)',
+  different: 'color-mix(in srgb, var(--vela-danger) 22%, transparent)',
+};
+
+const COMPARE_LABELS: Record<CompareStatus, string> = {
+  only: 'No existe en el otro lado',
+  newer: 'Más reciente que en el otro lado',
+  older: 'Más antiguo que en el otro lado',
+  different: 'Distinto tamaño que en el otro lado',
+  same: 'Igual en los dos lados',
+};
 
 interface RowProps {
   entries: RemoteEntry[];
+  compare: Map<string, CompareStatus> | null;
   selected: Set<string>;
   isRemote: boolean;
   dropTarget: string | null;
@@ -74,13 +98,15 @@ function EntryIcon({ entry }: { entry: RemoteEntry }) {
   return <File size={14} className="shrink-0 text-[var(--vela-fg-muted)]" />;
 }
 
-function Row({ index, style, ariaAttributes, entries, selected, isRemote, dropTarget, ...handlers }: RowComponentProps<RowProps>) {
+function Row({ index, style, ariaAttributes, entries, compare, selected, isRemote, dropTarget, ...handlers }: RowComponentProps<RowProps>) {
   const entry = entries[index]!;
   const isSelected = selected.has(entry.path);
+  const status = compare?.get(entry.name);
+  const compareColor = status && !isSelected ? COMPARE_COLORS[status] : undefined;
   return (
     <div
       {...ariaAttributes}
-      style={{ ...style, gridTemplateColumns: isRemote ? GRID_REMOTE : GRID_LOCAL } as CSSProperties}
+      style={{ ...style, gridTemplateColumns: isRemote ? GRID_REMOTE : GRID_LOCAL, ...(compareColor ? { background: compareColor } : {}) } as CSSProperties}
       className={`vela-file-row grid cursor-default select-none items-center gap-2 px-2 text-xs ${
         isSelected ? 'bg-[var(--vela-sidebar-active-bg)]' : index % 2 ? 'bg-black/[0.03]' : ''
       } ${dropTarget === entry.path ? 'outline outline-1 outline-[var(--vela-accent)]' : ''}`}
@@ -91,7 +117,7 @@ function Row({ index, style, ariaAttributes, entries, selected, isRemote, dropTa
       onDragStart={(e) => handlers.onRowDragStart(e, entry)}
       onDragOver={(e) => handlers.onRowDragOver(e, entry)}
       onDrop={(e) => handlers.onRowDrop(e, entry)}
-      title={entry.target ? `${entry.name} → ${entry.target}` : entry.name}
+      title={[entry.target ? `${entry.name} → ${entry.target}` : entry.name, status ? COMPARE_LABELS[status] : null].filter(Boolean).join('\n')}
     >
       <span className="flex min-w-0 items-center gap-1.5">
         <EntryIcon entry={entry} />
@@ -104,7 +130,7 @@ function Row({ index, style, ariaAttributes, entries, selected, isRemote, dropTa
   );
 }
 
-export function FilePane({ paneKey, sessionId, focused, onFocus }: FilePaneProps) {
+export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null }: FilePaneProps) {
   const isRemote = paneKey !== 'local';
   const pane = usePanesStore((s) => s.panes[paneKey]);
   const store = usePanesStore.getState;
@@ -173,6 +199,38 @@ export function FilePane({ paneKey, sessionId, focused, onFocus }: FilePaneProps
   };
 
   const select = (paths: string[], anchor: string | null) => store().setSelection(paneKey, paths, anchor);
+
+  const preview = (entry: RemoteEntry) => {
+    if (entry.type === 'dir') return;
+    const source = isRemote ? { kind: 'remote' as const, sessionId: sessionId!, path: entry.path } : { kind: 'local' as const, path: entry.path };
+    useDialogStore.getState().open({ kind: 'preview', source });
+  };
+
+  const edit = (entry: RemoteEntry) => {
+    if (!isRemote || !sessionId || entry.type === 'dir') return;
+    void call(window.api.files.editRemote(sessionId, entry.path)).catch((err) => toast(`No se pudo abrir: ${errorText(err)}`, 'error'));
+  };
+
+  /** El fichero con el mismo nombre en la carpeta del otro panel, si existe. */
+  const counterpart = (entry: RemoteEntry): { sessionId: string; remotePath: string; localPath: string } | null => {
+    const other = otherPane();
+    const match = other?.entries.find((x) => x.name === entry.name && x.type !== 'dir');
+    if (!match || entry.type === 'dir') return null;
+    if (isRemote) return sessionId ? { sessionId, remotePath: entry.path, localPath: match.path } : null;
+    return activeSession ? { sessionId: activeSession.sessionId, remotePath: match.path, localPath: entry.path } : null;
+  };
+
+  /** Vigilar una carpeta local y subir sus cambios a la carpeta equivalente del panel remoto activo. */
+  const watchFolder = (localDir: string, remoteDir: string) => {
+    if (!activeSession) return;
+    void startWatch(activeSession.sessionId, activeSession.siteName, localDir, remoteDir);
+  };
+
+  const diff = (entry: RemoteEntry) => {
+    const pair = counterpart(entry);
+    if (!pair) return;
+    void call(window.api.files.diff(pair.sessionId, pair.remotePath, pair.localPath)).catch((err) => toast(`No se pudo comparar: ${errorText(err)}`, 'error'));
+  };
 
   const onRowMouseDown = (e: MouseEvent, entry: RemoteEntry, index: number) => {
     onFocus();
@@ -268,6 +326,27 @@ export function FilePane({ paneKey, sessionId, focused, onFocus }: FilePaneProps
         disabled: !canTransfer,
         onSelect: () => void transfer(items),
       },
+      ...(single && single.type !== 'dir'
+        ? [
+            { label: 'Vista previa', icon: <ScanEye size={13} />, shortcut: 'Espacio', onSelect: () => preview(single) },
+            ...(isRemote ? [{ label: 'Editar', icon: <FileCode size={13} />, shortcut: 'F4', onSelect: () => edit(single) }] : []),
+            {
+              label: isRemote ? 'Comparar con el fichero local' : 'Comparar con el fichero del servidor',
+              icon: <GitCompareArrows size={13} />,
+              disabled: !counterpart(single),
+              onSelect: () => diff(single),
+            },
+          ]
+        : []),
+      ...(!isRemote && single?.type === 'dir' && activeSession
+        ? [
+            {
+              label: `Vigilar y subir cambios a ${remotePaths.join(otherPane()?.path ?? '/', single.name)}`,
+              icon: <Radar size={13} />,
+              onSelect: () => watchFolder(single.path, remotePaths.join(otherPane()?.path ?? '/', single.name)),
+            },
+          ]
+        : []),
       ...(!isRemote && single
         ? [
             { label: 'Abrir con la aplicación predeterminada', icon: <ExternalLink size={13} />, onSelect: () => void call(window.api.local.open(single.path)) },
@@ -300,6 +379,15 @@ export function FilePane({ paneKey, sessionId, focused, onFocus }: FilePaneProps
       { label: 'Nueva carpeta', icon: <FolderPlus size={13} />, onSelect: () => void mkdir() },
       { label: 'Refrescar', icon: <RefreshCw size={13} />, shortcut: 'F5', onSelect: refresh },
       { label: pane.showHidden ? 'Ocultar ficheros ocultos' : 'Mostrar ficheros ocultos', icon: pane.showHidden ? <EyeOff size={13} /> : <Eye size={13} />, onSelect: () => store().toggleHidden(paneKey) },
+      ...(!isRemote && activeSession && otherPane()
+        ? [
+            {
+              label: `Vigilar esta carpeta y subir cambios a ${otherPane()!.path}`,
+              icon: <Radar size={13} />,
+              onSelect: () => watchFolder(pane.path, otherPane()!.path),
+            },
+          ]
+        : []),
       { kind: 'separator' },
       { label: 'Copiar ruta de esta carpeta', icon: <Copy size={13} />, onSelect: () => copyPaths([{ path: pane.path } as RemoteEntry]) },
     ]);
@@ -406,6 +494,18 @@ export function FilePane({ paneKey, sessionId, focused, onFocus }: FilePaneProps
       case 'F5':
         e.preventDefault();
         return refresh();
+      case ' ': {
+        const current = selectedEntries();
+        if (current.length !== 1) return;
+        e.preventDefault();
+        return preview(current[0]!);
+      }
+      case 'F4': {
+        const current = selectedEntries();
+        if (current.length !== 1 || !isRemote) return;
+        e.preventDefault();
+        return edit(current[0]!);
+      }
       default:
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
           e.preventDefault();
@@ -528,6 +628,7 @@ export function FilePane({ paneKey, sessionId, focused, onFocus }: FilePaneProps
             rowHeight={ROW_HEIGHT}
             rowProps={{
               entries,
+              compare,
               selected: selectedSet,
               isRemote,
               dropTarget,

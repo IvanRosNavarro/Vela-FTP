@@ -2,6 +2,7 @@
 import type { BaseIpcErrorCode } from 'vela-kit/ipc';
 import type { CommandAction } from './commands';
 import type { UpdateStatus } from './updates';
+import type { WatchInfo } from './schemas/watch';
 import type { ConflictInfo, JobSnapshot, ProtocolLogLine, TransferError, TransferErrorCode } from './transfer/types';
 
 export const IPC_CHANNELS = {
@@ -81,6 +82,18 @@ export const IPC_CHANNELS = {
 
   DIALOG_OPEN: 'dialog:open',
 
+  FILES_EDIT_REMOTE: 'files:edit-remote',
+  FILES_PREVIEW_REMOTE: 'files:preview-remote',
+  FILES_PREVIEW_LOCAL: 'files:preview-local',
+  FILES_DIFF: 'files:diff',
+  EDITOR_LOAD: 'editor:load',
+  EDITOR_SAVE: 'editor:save',
+  EDITOR_SET_DIRTY: 'editor:set-dirty',
+  EDITOR_CLOSE: 'editor:close',
+  WATCH_LIST: 'watch:list',
+  WATCH_START: 'watch:start',
+  WATCH_STOP: 'watch:stop',
+
   UPDATES_STATUS: 'updates:status',
   UPDATES_CHECK: 'updates:check',
   UPDATES_DOWNLOAD: 'updates:download',
@@ -102,6 +115,9 @@ export const IPC_EVENTS = {
   BOOKMARKS_CHANGED: 'state:bookmarks-changed',
   COMMAND_ACTION: 'state:command-action',
   UPDATES_CHANGED: 'state:updates-changed',
+  /** El usuario quiere cerrar un editor con cambios sin guardar. */
+  EDITOR_CLOSE_REQUESTED: 'state:editor-close-requested',
+  WATCHES_CHANGED: 'state:watches-changed',
 } as const;
 
 export type IpcEventName = (typeof IPC_EVENTS)[keyof typeof IPC_EVENTS];
@@ -119,6 +135,8 @@ export interface MainEventPayloads {
   [IPC_EVENTS.BOOKMARKS_CHANGED]: null;
   [IPC_EVENTS.COMMAND_ACTION]: { action: CommandAction };
   [IPC_EVENTS.UPDATES_CHANGED]: UpdateStatus;
+  [IPC_EVENTS.EDITOR_CLOSE_REQUESTED]: null;
+  [IPC_EVENTS.WATCHES_CHANGED]: WatchInfo[];
 }
 
 /** Códigos de error que el renderer puede recibir en un `IpcResponse`. */
@@ -127,4 +145,5 @@ export type AppErrorCode =
   | TransferErrorCode
   | 'VAULT_LOCKED'
   | 'INVALID_MASTER_PASSWORD'
-  | 'KEYCHAIN_UNAVAILABLE';
+  | 'KEYCHAIN_UNAVAILABLE'
+  | 'BINARY_FILE';

@@ -18,6 +18,7 @@ import { useUiStore } from './stores/uiStore';
 import { runCommandAction } from './lib/commandActions';
 import { createUpdateNotifier } from './lib/updates';
 import { useUpdatesStore } from './stores/updatesStore';
+import { useWatchStore } from './stores/watchStore';
 
 async function readSetting<K extends 'ui:bottom-panel-height' | 'ui:sidebar-width' | 'local:last-path'>(key: K) {
   const res = await window.api.settings.get(key);
@@ -80,6 +81,7 @@ export function App() {
       notifyUpdate(status);
     };
     void call(window.api.updates.status()).then(applyUpdateStatus).catch(() => undefined);
+    void call(window.api.watch.list()).then(useWatchStore.getState().setWatches).catch(() => undefined);
 
     void (async () => {
       const [width, height, lastLocal] = await Promise.all([
@@ -112,6 +114,7 @@ export function App() {
       window.api.on(IPC_EVENTS.BOOKMARKS_CHANGED, () => void useSitesStore.getState().loadBookmarks()),
       window.api.on(IPC_EVENTS.COMMAND_ACTION, ({ action }) => runCommandAction(action)),
       window.api.on(IPC_EVENTS.UPDATES_CHANGED, applyUpdateStatus),
+      window.api.on(IPC_EVENTS.WATCHES_CHANGED, (list) => useWatchStore.getState().setWatches(list)),
       window.api.on(IPC_EVENTS.VAULT_CHANGED, () => void useSitesStore.getState().loadVault()),
       window.api.on(IPC_EVENTS.QUEUE_UPDATED, ({ jobs, removedIds }) => queue.applyUpdate(jobs, removedIds)),
       window.api.on(IPC_EVENTS.QUEUE_CONFLICT, (info) => queue.addConflict(info)),

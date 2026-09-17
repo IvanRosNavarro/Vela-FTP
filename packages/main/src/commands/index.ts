@@ -51,6 +51,9 @@ export function buildCommandRegistry(): CommandRegistry<CommandContext, CommandC
   registry.register(uiCommand('view.toggleHidden', 'Mostrar u ocultar ficheros ocultos', 'view', 'toggle-hidden', 'Ctrl+H'));
   registry.register(uiCommand('view.refresh', 'Refrescar los paneles', 'view', 'refresh', 'Ctrl+R'));
   registry.register(uiCommand('view.toggleBottomPanel', 'Mostrar u ocultar la cola', 'view', 'toggle-bottom-panel', 'Ctrl+J'));
+  // Mismos atajos que FileZilla.
+  registry.register(uiCommand('view.toggleCompare', 'Comparar carpetas', 'view', 'toggle-compare', 'Ctrl+O'));
+  registry.register(uiCommand('navigation.toggleSyncBrowsing', 'Navegación sincronizada', 'navigation', 'toggle-sync-browsing', 'Ctrl+Y'));
   registry.register(uiCommand('transfer.cancelAll', 'Cancelar todas las transferencias', 'transfer', 'cancel-all'));
   registry.register(uiCommand('transfer.retryFailed', 'Reintentar las transferencias fallidas', 'transfer', 'retry-failed'));
 

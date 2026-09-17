@@ -6,7 +6,7 @@ import type { ConnectionConfig } from '@vela-ftp/shared';
 import { TransferFailure } from './errors';
 import { FtpFs } from './fs/FtpFs';
 import type { RemoteFs } from './fs/RemoteFs';
-import { SftpFs } from './fs/SftpFs';
+import { NEW_FILE_MODE, SftpFs } from './fs/SftpFs';
 import { removeDir, startFtpServer } from './test/ftpServer';
 import { startSftpServer } from './test/sftpServer';
 
@@ -169,6 +169,37 @@ describe.each(variants)('%s', (_name, setupFn) => {
     });
     await expect(promise).rejects.toMatchObject({ code: 'CANCELLED' });
     conn.close();
+  });
+});
+
+describe('SFTP: permisos al subir', () => {
+  it('conserva los del fichero que sobrescribe y no deja los nuevos escribibles por todos', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'vela-sftp-mode-'));
+    const local = await mkdtemp(path.join(tmpdir(), 'vela-sftp-mode-local-'));
+    const srv = await startSftpServer(root, USER, PASS);
+    const fs = new SftpFs(
+      { protocol: 'sftp', host: '127.0.0.1', port: srv.port, username: USER, auth: 'password', password: PASS, trustedFingerprints: [srv.fingerprint], timeoutMs: 5000 },
+      noop,
+    );
+    try {
+      await fs.connect();
+      const source = path.join(local, 'a.php');
+      await writeFile(source, '<?php echo 1;');
+
+      await fs.upload(source, '/nuevo.php', options());
+      expect((await fs.stat('/nuevo.php'))?.mode).toBe(NEW_FILE_MODE);
+
+      await fs.chmod('/nuevo.php', 0o640);
+      await writeFile(source, '<?php echo 2;');
+      await fs.upload(source, '/nuevo.php', options());
+      expect((await fs.stat('/nuevo.php'))?.mode).toBe(0o640);
+      expect(await readFile(path.join(root, 'nuevo.php'), 'utf8')).toBe('<?php echo 2;');
+    } finally {
+      fs.close();
+      await srv.close();
+      await removeDir(root);
+      await removeDir(local);
+    }
   });
 });
 

@@ -98,6 +98,10 @@ export type TransferErrorCode =
   | 'NOT_CONNECTED'
   | 'CANCELLED'
   | 'LOCAL_IO'
+  /** El fichero supera el tamaño admitido para abrirlo (editor, vista previa). */
+  | 'TOO_LARGE'
+  /** El fichero remoto cambió desde que se abrió: guardar lo pisaría. */
+  | 'REMOTE_CHANGED'
   | 'PROTOCOL'
   | 'INTERNAL';
 

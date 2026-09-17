@@ -19,7 +19,13 @@ import { SitesRepository } from './storage/repositories/SitesRepository';
 import { TransferJobsRepository } from './storage/repositories/TransferJobsRepository';
 import { QueueMirror } from './transfer/QueueMirror';
 import { TransferHost } from './transfer/TransferHost';
-import { createMainWindow } from './window/mainWindow';
+import { createMainWindow, createShellWindow } from './window/mainWindow';
+import { EditorManager } from './files/EditorManager';
+import { cleanTempRoot } from './files/tempFiles';
+import { WatchManager } from './files/WatchManager';
+import { broadcast } from './ipc/handle';
+import { IPC_EVENTS } from '@vela-ftp/shared';
+import { registerFileHandlers } from './ipc/files';
 import { registerUpdateHandlers } from './ipc/updates';
 import { createUpdateService } from './updater';
 import type { UpdateService } from './updater/UpdateService';
@@ -27,6 +33,7 @@ import type { UpdateService } from './updater/UpdateService';
 let transfer: TransferHost | null = null;
 let queue: QueueMirror | null = null;
 let updates: UpdateService | null = null;
+let watches: WatchManager | null = null;
 
 app.setName('Vela FTP');
 app.setAppUserModelId('com.vela.ftp');
@@ -101,6 +108,25 @@ if (!app.requestSingleInstanceLock()) {
     const history = new PathHistoryRepository(db);
     registerAppHandlers({ sites, knownHosts, secrets, sessions, transfer, queue, history });
 
+    void cleanTempRoot();
+    const editor = new EditorManager({
+      transfer,
+      sessions,
+      openWindow: (query, title) =>
+        createShellWindow({
+          themeId: settings.get('ui:theme'),
+          prefersDark: nativeTheme.shouldUseDarkColors,
+          title,
+          width: 1000,
+          height: 720,
+          minWidth: 480,
+          minHeight: 320,
+          query,
+        }),
+    });
+    watches = new WatchManager({ transfer, sessions, onChange: (list) => broadcast(IPC_EVENTS.WATCHES_CHANGED, list) });
+    registerFileHandlers(editor, watches);
+
     updates = createUpdateService(settings);
     registerUpdateHandlers(updates);
     updates.startAutoCheck();
@@ -128,6 +154,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('will-quit', () => {
     updates?.stop();
+    void watches?.stopAll();
     queue?.persist();
     transfer?.stop();
     closeStorage();

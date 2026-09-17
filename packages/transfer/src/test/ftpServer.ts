@@ -1,8 +1,8 @@
 // Servidor FTP mínimo para tests: lo justo que usa basic-ftp (EPSV/PASV, MLSD,
-// RETR/STOR/APPE con REST, SIZE, MDTM, MKD/RMD/DELE, RNFR/RNTO, SITE CHMOD).
+// RETR/STOR/APPE con REST, SIZE, MDTM, MFMT, MKD/RMD/DELE, RNFR/RNTO, SITE CHMOD).
 // Sin TLS. No usar fuera de los tests.
 import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdir, readdir, rename, rm, rmdir, stat, unlink } from 'node:fs/promises';
+import { mkdir, readdir, rename, rm, rmdir, stat, unlink, utimes } from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
 
@@ -117,7 +117,7 @@ export async function startFtpServer(root: string, user: string, pass: string, o
             return reply('215 UNIX Type: L8');
           case 'FEAT':
             // basic-ftp usa MLSD solo si el servidor anuncia MLST.
-            control.write(`211-Features:\r\n${mlsd ? ' MLST type*;size*;modify*;UNIX.mode*;\r\n' : ''} SIZE\r\n MDTM\r\n REST STREAM\r\n EPSV\r\n UTF8\r\n211 End\r\n`);
+            control.write(`211-Features:\r\n${mlsd ? ' MLST type*;size*;modify*;UNIX.mode*;\r\n' : ''} SIZE\r\n MDTM\r\n MFMT\r\n REST STREAM\r\n EPSV\r\n UTF8\r\n211 End\r\n`);
             return;
           case 'OPTS':
           case 'TYPE':
@@ -170,6 +170,13 @@ export async function startFtpServer(root: string, user: string, pass: string, o
             return reply(`213 ${(await stat(local(remote(arg)))).size}`);
           case 'MDTM':
             return reply(`213 ${mdtm((await stat(local(remote(arg)))).mtime)}`);
+          case 'MFMT': {
+            const m = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\s+(.+)$/.exec(arg);
+            if (!m) return reply('501 Syntax error');
+            const when = new Date(Date.UTC(+m[1]!, +m[2]! - 1, +m[3]!, +m[4]!, +m[5]!, +m[6]!));
+            await utimes(local(remote(m[7]!)), when, when);
+            return reply(`213 Modify=${m.slice(1, 7).join('')}; ${m[7]}`);
+          }
           case 'REST':
             restOffset = Number(arg);
             return reply(`350 Restarting at ${restOffset}`);
