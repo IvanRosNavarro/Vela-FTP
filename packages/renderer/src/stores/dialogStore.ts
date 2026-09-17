@@ -7,9 +7,10 @@ export type DialogSpec =
   | { kind: 'confirm'; title: string; message: string; confirmLabel: string; danger: boolean; resolve: (ok: boolean) => void }
   | { kind: 'prompt'; title: string; label: string; initial: string; confirmLabel: string; validate: (v: string) => string | null; resolve: (value: string | null) => void }
   | { kind: 'siteEditor'; site: Site | null; projectId?: string | null }
-  | { kind: 'settings'; section?: 'general' | 'appearance' | 'shortcuts' | 'security' | 'about' }
+  | { kind: 'settings'; section?: 'general' | 'appearance' | 'shortcuts' | 'security' | 'sync' | 'about' }
   | { kind: 'palette'; initialQuery?: string }
   | { kind: 'importFileZilla' }
+  | { kind: 'welcome' }
   | { kind: 'preview'; source: PreviewSource }
   | {
       kind: 'hostKey';

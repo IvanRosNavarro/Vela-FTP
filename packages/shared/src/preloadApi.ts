@@ -20,6 +20,8 @@ import type {
   Site,
   SiteInput,
   TitleBarOverlayInput,
+  SyncCategory,
+  SyncStatus,
   WatchInfo,
 } from './schemas';
 import type { UpdateStatus } from './updates';
@@ -172,6 +174,17 @@ export interface FilesApi {
   diff(sessionId: string, remotePath: string, localPath: string): Promise<AppResponse<null>>;
 }
 
+export interface SyncApi {
+  status(): Promise<AppResponse<SyncStatus>>;
+  /** Envía el enlace mágico al correo para vincular este dispositivo. */
+  requestLink(email: string): Promise<AppResponse<null>>;
+  /** Deriva la clave con la contraseña de sincronización y arranca. */
+  activate(password: string): Promise<AppResponse<SyncStatus>>;
+  deactivate(): Promise<AppResponse<null>>;
+  now(): Promise<AppResponse<SyncStatus>>;
+  setCategories(disabled: SyncCategory[]): Promise<AppResponse<SyncStatus>>;
+}
+
 export interface WatchApi {
   list(): Promise<AppResponse<WatchInfo[]>>;
   /** Sube a `remoteDir` lo que se cree o cambie en `localDir` mientras dure la vigilancia. */
@@ -216,6 +229,7 @@ export interface PreloadApi {
   files: FilesApi;
   editor: EditorApi;
   watch: WatchApi;
+  sync: SyncApi;
   /** Suscribe a un evento push del main. Devuelve la función de baja. */
   on<E extends IpcEventName>(event: E, listener: (payload: MainEventPayloads[E]) => void): () => void;
 }

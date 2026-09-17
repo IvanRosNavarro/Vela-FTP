@@ -5,6 +5,7 @@ import type { Site, SiteInput } from '@vela-ftp/shared';
 import { NotFoundError } from 'vela-kit/ipc';
 import { transaction } from 'vela-kit/storage';
 import type { SecretStore } from '../../security/SecretStore';
+import { emitEntity, emitEntityDeleted } from '../../sync/emit';
 
 type SecretKind = 'password' | 'passphrase';
 
@@ -112,7 +113,9 @@ export class SitesRepository {
         );
       this.applySecrets(id, input);
     });
-    return this.get(id);
+    const site = this.get(id);
+    this.publish(site);
+    return site;
   }
 
   update(id: string, input: SiteInput): Site {
@@ -143,7 +146,9 @@ export class SitesRepository {
         );
       this.applySecrets(id, input);
     });
-    return this.get(id);
+    const site = this.get(id);
+    this.publish(site);
+    return site;
   }
 
   /** undefined = no tocar, null = borrar, string = cifrar y guardar. */
@@ -174,6 +179,8 @@ export class SitesRepository {
   delete(id: string): void {
     this.get(id);
     this.db.prepare('DELETE FROM sites WHERE id = ?').run(id);
+    emitEntityDeleted('ftp.site', id);
+    emitEntityDeleted('ftp.site_secret', id);
   }
 
   duplicate(id: string): Site {
@@ -194,11 +201,129 @@ export class SitesRepository {
     this.db
       .prepare('UPDATE sites SET project_id = ?, position = ?, updated_at = ? WHERE id = ?')
       .run(projectId, generateKeyBetween(before, after), this.now(), id);
-    return this.get(id);
+    const site = this.get(id);
+    this.publish(site);
+    return site;
   }
 
   /** Compatibilidad: mover dentro del mismo proyecto. */
   move(id: string, beforeId: string | null, afterId: string | null): Site {
     return this.relocate(id, this.get(id).projectId, beforeId, afterId);
   }
+
+  // ── Sincronización ─────────────────────────────────────────────────────────
+
+  /** El sitio tal como viaja: sin secretos, que van en su propia entidad. */
+  toSync(site: Site): object {
+    const { hasPassword: _p, hasPassphrase: _s, createdAt: _c, ...rest } = site;
+    return rest;
+  }
+
+  /** Secretos descifrados; null si el sitio no tiene o el almacén está bloqueado. */
+  secretsToSync(id: string): object | null {
+    try {
+      const site = this.get(id);
+      const password = site.hasPassword ? this.getSecret(id, 'password') : null;
+      const passphrase = site.hasPassphrase ? this.getSecret(id, 'passphrase') : null;
+      if (password === null && passphrase === null) return null;
+      return { id, password, passphrase, updatedAt: this.secretsUpdatedAt(id) ?? site.updatedAt };
+    } catch {
+      // Vault bloqueado o sitio recién borrado: ya se enviará al desbloquear.
+      return null;
+    }
+  }
+
+  secretsUpdatedAt(id: string): number | null {
+    const row = this.db.prepare('SELECT MAX(updated_at) AS at FROM site_secrets WHERE site_id = ?').get(id) as { at: number | null } | undefined;
+    return row?.at ?? null;
+  }
+
+  syncUpdatedAt(id: string): number | null {
+    const row = this.db.prepare('SELECT updated_at FROM sites WHERE id = ?').get(id) as { updated_at: number } | undefined;
+    return row?.updated_at ?? null;
+  }
+
+  /** Aplica un sitio recibido de otro dispositivo. No vuelve a emitirlo. */
+  syncUpsert(site: SyncedSite): void {
+    this.db
+      .prepare(
+        `INSERT INTO sites (id, name, protocol, host, port, username, auth, key_path, initial_remote_path,
+           initial_local_path, max_connections, notes, project_id, position, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           name = excluded.name, protocol = excluded.protocol, host = excluded.host, port = excluded.port,
+           username = excluded.username, auth = excluded.auth, key_path = excluded.key_path,
+           initial_remote_path = excluded.initial_remote_path, initial_local_path = excluded.initial_local_path,
+           max_connections = excluded.max_connections, notes = excluded.notes, project_id = excluded.project_id,
+           position = excluded.position, updated_at = excluded.updated_at`,
+      )
+      .run(
+        site.id,
+        site.name,
+        site.protocol,
+        site.host,
+        site.port,
+        site.username,
+        site.auth,
+        site.keyPath,
+        site.initialRemotePath,
+        site.initialLocalPath,
+        site.maxConnections,
+        site.notes,
+        site.projectId,
+        site.position,
+        site.updatedAt,
+        site.updatedAt,
+      );
+  }
+
+  /** Guarda los secretos que llegan de otro dispositivo, cifrándolos aquí. */
+  syncUpsertSecrets(siteId: string, password: string | null, passphrase: string | null, updatedAt: number): void {
+    for (const [kind, value] of [
+      ['password', password],
+      ['passphrase', passphrase],
+    ] as const) {
+      if (value === null) {
+        this.db.prepare('DELETE FROM site_secrets WHERE site_id = ? AND kind = ?').run(siteId, kind);
+        continue;
+      }
+      this.db
+        .prepare(
+          `INSERT INTO site_secrets (site_id, kind, ciphertext, updated_at) VALUES (?, ?, ?, ?)
+           ON CONFLICT(site_id, kind) DO UPDATE SET ciphertext = excluded.ciphertext, updated_at = excluded.updated_at`,
+        )
+        .run(siteId, kind, this.secrets.encrypt(value), updatedAt);
+    }
+  }
+
+  syncDelete(id: string): void {
+    this.db.prepare('DELETE FROM sites WHERE id = ?').run(id);
+  }
+
+  /** Anuncia el sitio y, si los hay, sus secretos. */
+  private publish(site: Site): void {
+    emitEntity('ftp.site', site.id, this.toSync(site), site.updatedAt);
+    const secrets = this.secretsToSync(site.id);
+    if (secrets) emitEntity('ftp.site_secret', site.id, secrets, this.secretsUpdatedAt(site.id) ?? site.updatedAt);
+    else if (!site.hasPassword && !site.hasPassphrase) emitEntityDeleted('ftp.site_secret', site.id, site.updatedAt);
+  }
+}
+
+/** Sitio tal como llega por sincronización. */
+export interface SyncedSite {
+  id: string;
+  name: string;
+  protocol: Site['protocol'];
+  host: string;
+  port: number;
+  username: string;
+  auth: Site['auth'];
+  keyPath: string | null;
+  initialRemotePath: string | null;
+  initialLocalPath: string | null;
+  maxConnections: number;
+  notes: string;
+  projectId: string | null;
+  position: string;
+  updatedAt: number;
 }

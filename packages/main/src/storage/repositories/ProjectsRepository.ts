@@ -3,6 +3,7 @@ import { generateKeyBetween } from 'fractional-indexing';
 import { v7 as uuidv7 } from 'uuid';
 import type { Bookmark, BookmarkInput, PathVisit, Project, ProjectInput } from '@vela-ftp/shared';
 import { NotFoundError } from 'vela-kit/ipc';
+import { emitEntity, emitEntityDeleted } from '../../sync/emit';
 
 interface ProjectRow {
   id: string;
@@ -49,7 +50,9 @@ export class ProjectsRepository {
     this.db
       .prepare('INSERT INTO projects (id, name, color, position, collapsed, created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, ?)')
       .run(id, input.name, input.color, generateKeyBetween(last?.position ?? null, null), now, now);
-    return this.get(id);
+    const project = this.get(id);
+    emitEntity('ftp.project', id, project, project.updatedAt);
+    return project;
   }
 
   update(id: string, patch: { name?: string | undefined; color?: string | null | undefined; collapsed?: boolean | undefined }): Project {
@@ -63,20 +66,48 @@ export class ProjectsRepository {
         this.now(),
         id,
       );
-    return this.get(id);
+    const project = this.get(id);
+    emitEntity('ftp.project', id, project, project.updatedAt);
+    return project;
   }
 
   /** Sus sitios quedan sin proyecto (ON DELETE SET NULL). */
   delete(id: string): void {
     this.get(id);
     this.db.prepare('DELETE FROM projects WHERE id = ?').run(id);
+    emitEntityDeleted('ftp.project', id);
   }
 
   move(id: string, beforeId: string | null, afterId: string | null): Project {
     const before = beforeId ? this.get(beforeId).position : null;
     const after = afterId ? this.get(afterId).position : null;
     this.db.prepare('UPDATE projects SET position = ?, updated_at = ? WHERE id = ?').run(generateKeyBetween(before, after), this.now(), id);
-    return this.get(id);
+    const project = this.get(id);
+    emitEntity('ftp.project', id, project, project.updatedAt);
+    return project;
+  }
+
+  // ── Sincronización ─────────────────────────────────────────────────────────
+
+  syncUpdatedAt(id: string): number | null {
+    const row = this.db.prepare('SELECT updated_at FROM projects WHERE id = ?').get(id) as { updated_at: number } | undefined;
+    return row?.updated_at ?? null;
+  }
+
+  syncUpsert(project: Project): void {
+    this.db
+      .prepare(
+        `INSERT INTO projects (id, name, color, position, collapsed, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           name = excluded.name, color = excluded.color, position = excluded.position,
+           collapsed = excluded.collapsed, updated_at = excluded.updated_at`,
+      )
+      .run(project.id, project.name, project.color, project.position, project.collapsed ? 1 : 0, project.updatedAt, project.updatedAt);
+  }
+
+  syncDelete(id: string): void {
+    this.db.prepare('DELETE FROM projects WHERE id = ?').run(id);
   }
 }
 
@@ -131,7 +162,9 @@ export class BookmarksRepository {
         'INSERT INTO bookmarks (id, site_id, name, remote_path, local_path, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       )
       .run(id, input.siteId, input.name, input.remotePath, input.localPath, generateKeyBetween(last?.position ?? null, null), now, now);
-    return this.get(id);
+    const bookmark = this.get(id);
+    emitEntity('ftp.bookmark', id, bookmark, bookmark.updatedAt);
+    return bookmark;
   }
 
   update(id: string, patch: { name?: string | undefined; localPath?: string | null | undefined }): Bookmark {
@@ -139,11 +172,50 @@ export class BookmarksRepository {
     this.db
       .prepare('UPDATE bookmarks SET name = ?, local_path = ?, updated_at = ? WHERE id = ?')
       .run(patch.name ?? current.name, patch.localPath === undefined ? current.localPath : patch.localPath, this.now(), id);
-    return this.get(id);
+    const bookmark = this.get(id);
+    emitEntity('ftp.bookmark', id, bookmark, bookmark.updatedAt);
+    return bookmark;
   }
 
   delete(id: string): void {
     this.get(id);
+    this.db.prepare('DELETE FROM bookmarks WHERE id = ?').run(id);
+    emitEntityDeleted('ftp.bookmark', id);
+  }
+
+  // ── Sincronización ─────────────────────────────────────────────────────────
+
+  syncUpdatedAt(id: string): number | null {
+    const row = this.db.prepare('SELECT updated_at FROM bookmarks WHERE id = ?').get(id) as { updated_at: number } | undefined;
+    return row?.updated_at ?? null;
+  }
+
+  /** El marcador de un sitio que aún no ha llegado se descarta: la clave foránea lo exige. */
+  syncUpsert(bookmark: Bookmark): boolean {
+    const site = this.db.prepare('SELECT 1 FROM sites WHERE id = ?').get(bookmark.siteId);
+    if (!site) return false;
+    this.db
+      .prepare(
+        `INSERT INTO bookmarks (id, site_id, name, remote_path, local_path, position, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           site_id = excluded.site_id, name = excluded.name, remote_path = excluded.remote_path,
+           local_path = excluded.local_path, position = excluded.position, updated_at = excluded.updated_at`,
+      )
+      .run(
+        bookmark.id,
+        bookmark.siteId,
+        bookmark.name,
+        bookmark.remotePath,
+        bookmark.localPath,
+        bookmark.position,
+        bookmark.updatedAt,
+        bookmark.updatedAt,
+      );
+    return true;
+  }
+
+  syncDelete(id: string): void {
     this.db.prepare('DELETE FROM bookmarks WHERE id = ?').run(id);
   }
 }

@@ -26,6 +26,10 @@ import { WatchManager } from './files/WatchManager';
 import { broadcast } from './ipc/handle';
 import { IPC_EVENTS } from '@vela-ftp/shared';
 import { registerFileHandlers } from './ipc/files';
+import { registerSyncHandlers } from './ipc/sync';
+import { SyncManager } from './sync/SyncManager';
+import { SyncPendingRepository, SyncStateRepository } from './sync/syncState';
+import { onSessionToken, registerDeepLink } from './sync/deepLink';
 import { registerUpdateHandlers } from './ipc/updates';
 import { createUpdateService } from './updater';
 import type { UpdateService } from './updater/UpdateService';
@@ -34,6 +38,7 @@ let transfer: TransferHost | null = null;
 let queue: QueueMirror | null = null;
 let updates: UpdateService | null = null;
 let watches: WatchManager | null = null;
+let sync: SyncManager | null = null;
 
 app.setName('Vela FTP');
 app.setAppUserModelId('com.vela.ftp');
@@ -46,6 +51,7 @@ process.on('unhandledRejection', (reason) => {
 });
 
 registerAppSchemeAsPrivileged();
+registerDeepLink();
 
 /** macOS necesita menú de aplicación para copiar/pegar y Cmd+Q; el resto va sin menú. */
 function setApplicationMenu(): void {
@@ -124,6 +130,17 @@ if (!app.requestSingleInstanceLock()) {
           query,
         }),
     });
+    sync = new SyncManager({
+      state: new SyncStateRepository(db),
+      pending: new SyncPendingRepository(db),
+      repos: { sites, projects, bookmarks, knownHosts, settings },
+      onStatus: (status) => broadcast(IPC_EVENTS.SYNC_CHANGED, status),
+      onDataChanged: () => broadcast(IPC_EVENTS.SYNC_DATA_CHANGED, null),
+    });
+    registerSyncHandlers(sync);
+    onSessionToken((token) => sync?.onSessionToken(token));
+    void sync.restore();
+
     watches = new WatchManager({ transfer, sessions, onChange: (list) => broadcast(IPC_EVENTS.WATCHES_CHANGED, list) });
     registerFileHandlers(editor, watches);
 
@@ -154,6 +171,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('will-quit', () => {
     updates?.stop();
+    sync?.stop();
     void watches?.stopAll();
     queue?.persist();
     transfer?.stop();

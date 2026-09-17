@@ -125,6 +125,15 @@ const api: PreloadApi = {
     close: (id) => invoke(C.EDITOR_CLOSE, { id }),
   },
 
+  sync: {
+    status: () => invoke(C.SYNC_STATUS),
+    requestLink: (email) => invoke(C.SYNC_REQUEST_LINK, { email }),
+    activate: (password) => invoke(C.SYNC_ACTIVATE, { password }),
+    deactivate: () => invoke(C.SYNC_DEACTIVATE),
+    now: () => invoke(C.SYNC_NOW),
+    setCategories: (disabled) => invoke(C.SYNC_SET_CATEGORIES, { disabled }),
+  },
+
   watch: {
     list: () => invoke(C.WATCH_LIST),
     start: (sessionId, localDir, remoteDir) => invoke(C.WATCH_START, { sessionId, localDir, remoteDir }),

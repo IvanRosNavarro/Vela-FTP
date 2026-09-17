@@ -3,6 +3,7 @@ import { useQueueStore } from '../../stores/queueStore';
 import { ImportFileZillaDialog } from './ImportFileZillaDialog';
 import { PaletteHost } from './PaletteHost';
 import { PreviewDialog } from './PreviewDialog';
+import { WelcomeDialog } from './WelcomeDialog';
 import { MasterPasswordDialog, HostKeyDialog, UnlockDialog } from './SecurityDialogs';
 import { SettingsDialog } from './SettingsDialog';
 import { ConfirmDialog, PromptDialog } from './SimpleDialogs';
@@ -32,6 +33,8 @@ export function DialogHost() {
         return <PaletteHost {...(top.initialQuery !== undefined ? { initialQuery: top.initialQuery } : {})} onClose={onClose} />;
       case 'importFileZilla':
         return <ImportFileZillaDialog onClose={onClose} />;
+      case 'welcome':
+        return <WelcomeDialog onClose={onClose} />;
       case 'preview':
         return <PreviewDialog source={top.source} onClose={onClose} />;
       case 'hostKey':
