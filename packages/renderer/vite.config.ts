@@ -28,6 +28,9 @@ export default defineConfig({
       '@vela-ftp/shared': resolve(__dirname, '../shared/src/index.ts'),
       '@': resolve(__dirname, 'src'),
     },
+    // Con vela-kit enlazado, sus imports resolverían contra su propio
+    // node_modules y habría dos React (hooks rotos) y dos stores de zustand.
+    dedupe: ['react', 'react-dom', 'zustand'],
   },
   server: {
     // 5173 es el de Vela Browser.

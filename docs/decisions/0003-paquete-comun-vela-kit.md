@@ -26,9 +26,10 @@ licencia GPL-3.0-only, consumido por Vela Browser, Vela FTP y futuras apps.
 | `theme` | tokens, 8 temas builtin, `ThemeManager`, validador CSS | renderer | v0.1.0 |
 | `logger` | logger con rotación diaria, nombre de fichero configurable | main | v0.1.0 |
 | `ipc` | `IpcResponse`, `validatePayload` (zod), `createFrameGuard`, errores tipados | main | v0.1.0 |
-| `commands` | registro central y `ShortcutTable`, sin definiciones de producto | main | pendiente |
-| `ui` | toasts, `fuzzy`, Command Palette, title bar, ErrorBoundary, logo | renderer | pendiente |
-| `security` | CSP dev/prod | main | pendiente |
+| `commands` | `CommandRegistry` genérico, `ShortcutTable`, `attachShortcuts` | main | v0.2.0 |
+| `ui` | toasts, `Toaster`, `fuzzy`, `ErrorBoundary` | renderer | v0.2.0 |
+| `ui` (2ª parte) | Command Palette, title bar por plataforma, logo | renderer | cuando Vela FTP los necesite |
+| `security` | bases de CSP dev/prod, `extendCsp`, `buildCspHeader` | main | v0.2.0 |
 
 ### Distribución
 
@@ -53,7 +54,8 @@ paquete para dos consumidores propios no compensa.
 - No se usa `pnpm link`: reescribe `pnpm-lock.yaml` y `pnpm unlink` falla
   dentro de un workspace. El CI conserva un guard por si un lockfile llega con
   `vela-kit` apuntando a `link:`.
-- El renderer añade la carpeta real del kit a `server.fs.allow` para que el
+- El renderer declara `resolve.dedupe` para `react`, `react-dom` y `zustand`, y
+  añade la carpeta real del kit a `server.fs.allow` para que el
   dev server de Vite pueda servirla estando enlazada.
 - Probado en Vela FTP: con el kit enlazado un cambio aparece en el build; tras
   `kit:unlink` el build vuelve al tag y el lockfile queda intacto.

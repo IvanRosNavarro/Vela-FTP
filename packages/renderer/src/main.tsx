@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { ErrorBoundary, Toaster } from 'vela-kit/ui';
 import { App } from './App';
 import { themeManager } from './theme';
 import './index.css';
@@ -15,6 +16,9 @@ if (!container) {
 
 createRoot(container).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+      <Toaster />
+    </ErrorBoundary>
   </StrictMode>,
 );

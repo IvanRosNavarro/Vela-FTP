@@ -33,8 +33,8 @@ importers:
         specifier: workspace:*
         version: link:../shared
       vela-kit:
-        specifier: github:IvanRosNavarro/Vela-Kit#v0.1.0
-        version: https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/e8916e81f25c5cd69db1af46f583fe0a7fbf032e(electron@42.11.4)
+        specifier: github:IvanRosNavarro/Vela-Kit#v0.2.0
+        version: https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/3be36b92cb6d57760f213b23a2017431f62e3486(electron@42.11.4)(react@18.3.1)(zustand@4.5.7(@types/react@18.3.3)(react@18.3.1))
     devDependencies:
       '@types/node':
         specifier: 22.10.0
@@ -86,8 +86,11 @@ importers:
         specifier: 18.3.1
         version: 18.3.1(react@18.3.1)
       vela-kit:
-        specifier: github:IvanRosNavarro/Vela-Kit#v0.1.0
-        version: https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/e8916e81f25c5cd69db1af46f583fe0a7fbf032e(electron@42.11.4)
+        specifier: github:IvanRosNavarro/Vela-Kit#v0.2.0
+        version: https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/3be36b92cb6d57760f213b23a2017431f62e3486(electron@42.11.4)(react@18.3.1)(zustand@4.5.7(@types/react@18.3.3)(react@18.3.1))
+      zustand:
+        specifier: 4.5.7
+        version: 4.5.7(@types/react@18.3.3)(react@18.3.1)
     devDependencies:
       '@types/react':
         specifier: 18.3.3
@@ -1295,20 +1298,31 @@ packages:
     peerDependencies:
       browserslist: '>= 4.21.0'
 
+  use-sync-external-store@1.7.0:
+    resolution: {integrity: sha512-6L+EeigHMQhdaIPNIFUKwfWJSwWFQ8gJbJ2DLOs5sDIegTwR9fRxvnM3uciHKjIZhFz+KAv2emhWMRvDmMcY8A==}
+    peerDependencies:
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
 
-  vela-kit@https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/e8916e81f25c5cd69db1af46f583fe0a7fbf032e:
-    resolution: {tarball: https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/e8916e81f25c5cd69db1af46f583fe0a7fbf032e}
-    version: 0.1.0
+  vela-kit@https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/3be36b92cb6d57760f213b23a2017431f62e3486:
+    resolution: {tarball: https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/3be36b92cb6d57760f213b23a2017431f62e3486}
+    version: 0.2.0
     engines: {node: '>=22.0.0'}
     peerDependencies:
       electron: '>=42.0.0'
+      react: ^18.0.0
       zod: ^4.0.0
+      zustand: '>=4.5.0 <6'
     peerDependenciesMeta:
       electron:
         optional: true
+      react:
+        optional: true
       zod:
+        optional: true
+      zustand:
         optional: true
 
   vite@6.4.3:
@@ -1388,6 +1402,21 @@ packages:
   yargs@17.7.3:
     resolution: {integrity: sha512-GZtjxm/J/4TSxuL3FNYjCmLktBTnIw/rVmKSIyKeYAZpmJB2ig9VauCC5xsa82GNKVKDAqpOn3KVzNt0zmrU0g==}
     engines: {node: '>=12'}
+
+  zustand@4.5.7:
+    resolution: {integrity: sha512-CHOUy7mu3lbD6o6LJLfllpjkzhHXSBlX8B9+qPddUsIfeF5S/UZ5q0kmCsnRqT1UHFQZchNFDDzMbQsuesHWlw==}
+    engines: {node: '>=12.7.0'}
+    peerDependencies:
+      '@types/react': '>=16.8'
+      immer: '>=9.0.6'
+      react: '>=16.8'
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      immer:
+        optional: true
+      react:
+        optional: true
 
 snapshots:
 
@@ -2487,11 +2516,17 @@ snapshots:
       escalade: 3.2.0
       picocolors: 1.1.1
 
+  use-sync-external-store@1.7.0(react@18.3.1):
+    dependencies:
+      react: 18.3.1
+
   util-deprecate@1.0.2: {}
 
-  vela-kit@https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/e8916e81f25c5cd69db1af46f583fe0a7fbf032e(electron@42.11.4):
+  vela-kit@https://codeload.github.com/IvanRosNavarro/Vela-Kit/tar.gz/3be36b92cb6d57760f213b23a2017431f62e3486(electron@42.11.4)(react@18.3.1)(zustand@4.5.7(@types/react@18.3.3)(react@18.3.1)):
     optionalDependencies:
       electron: 42.11.4
+      react: 18.3.1
+      zustand: 4.5.7(@types/react@18.3.3)(react@18.3.1)
 
   vite@6.4.3(@types/node@22.10.0)(jiti@1.21.7)(yaml@2.9.1):
     dependencies:
@@ -2565,3 +2600,10 @@ snapshots:
       string-width: 4.2.3
       y18n: 5.0.8
       yargs-parser: 21.1.1
+
+  zustand@4.5.7(@types/react@18.3.3)(react@18.3.1):
+    dependencies:
+      use-sync-external-store: 1.7.0(react@18.3.1)
+    optionalDependencies:
+      '@types/react': 18.3.3
+      react: 18.3.1
