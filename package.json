@@ -22,12 +22,17 @@
     "clean": "pnpm -r --parallel clean && rimraf node_modules",
     "kit:link": "node scripts/kit-link.mjs link",
     "kit:unlink": "node scripts/kit-link.mjs unlink",
-    "test": "pnpm -r --parallel --if-present test"
+    "test": "pnpm -r --parallel --if-present test",
+    "build:win": "pnpm build && electron-builder --config electron-builder.config.cjs --win",
+    "build:mac": "pnpm build && electron-builder --config electron-builder.config.cjs --mac",
+    "build:linux": "pnpm build && electron-builder --config electron-builder.config.cjs --linux",
+    "icon": "electron scripts/generate-icon.cjs"
   },
   "devDependencies": {
     "@types/node": "22.10.0",
     "concurrently": "8.2.2",
     "electron": "42.11.4",
+    "electron-builder": "26.15.3",
     "rimraf": "5.0.7",
     "typescript": "5.4.5",
     "wait-on": "7.2.0"
@@ -35,11 +40,16 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "electron",
+      "electron-builder",
       "esbuild"
-    ]
+    ],
+    "overrides": {
+      "electron-builder-squirrel-windows": "26.15.3"
+    }
   },
   "dependencies": {
     "basic-ftp": "6.2.1",
     "ssh2": "1.17.0"
-  }
+  },
+  "productName": "Vela FTP"
 }
