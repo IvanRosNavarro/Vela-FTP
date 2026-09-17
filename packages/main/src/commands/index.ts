@@ -34,8 +34,18 @@ function uiCommand(id: string, title: string, category: CommandCategory, action:
   });
 }
 
-export function buildCommandRegistry(): CommandRegistry<CommandContext, CommandCategory> {
+export function buildCommandRegistry(openWindow: () => void): CommandRegistry<CommandContext, CommandCategory> {
   const registry = new CommandRegistry<CommandContext, CommandCategory>();
+
+  registry.register(
+    defineCommand({
+      id: 'window.new',
+      title: 'Nueva ventana',
+      category: 'window',
+      defaultShortcut: 'Ctrl+Shift+N',
+      run: () => openWindow(),
+    }),
+  );
 
   registry.register(uiCommand('app.commandPalette', 'Paleta de comandos', 'app', 'open-palette', PALETTE_SHORTCUT));
   registry.register(uiCommand('app.settings', 'Ajustes', 'app', 'open-settings', 'Ctrl+,'));

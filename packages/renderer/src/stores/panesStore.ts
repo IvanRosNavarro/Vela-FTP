@@ -19,19 +19,32 @@ export interface PaneState {
   history: string[];
 }
 
-/** 'local' o `remote:<sessionId>`. */
-export type PaneKey = 'local' | `remote:${string}`;
+/**
+ * `local` (sin ninguna conexión), `local:<sessionId>` o `remote:<sessionId>`.
+ * Como en FileZilla, cada pestaña remota lleva su propia carpeta local.
+ */
+export type PaneKey = 'local' | `local:${string}` | `remote:${string}`;
 
 export function remotePaneKey(sessionId: string): PaneKey {
   return `remote:${sessionId}`;
 }
 
-function sessionOf(key: PaneKey): string | null {
-  return key === 'local' ? null : key.slice('remote:'.length);
+export function localPaneKey(sessionId: string | null): PaneKey {
+  return sessionId ? `local:${sessionId}` : 'local';
+}
+
+export function isRemotePane(key: PaneKey): boolean {
+  return key.startsWith('remote:');
+}
+
+/** La sesión a la que pertenece el panel, sea el local o el remoto. */
+export function sessionOfPane(key: PaneKey): string | null {
+  const separator = key.indexOf(':');
+  return separator < 0 ? null : key.slice(separator + 1);
 }
 
 async function fetchEntries(key: PaneKey, path: string): Promise<RemoteEntry[]> {
-  const sessionId = sessionOf(key);
+  const sessionId = isRemotePane(key) ? sessionOfPane(key) : null;
   return sessionId ? call(window.api.remote.list(sessionId, path)) : call(window.api.local.list(path));
 }
 

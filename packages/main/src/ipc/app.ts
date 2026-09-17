@@ -34,6 +34,7 @@ import { v7 as uuidv7 } from 'uuid';
 import type { SecretStore } from '../security/SecretStore';
 import { restoredSessionId } from '../storage/repositories/TransferJobsRepository';
 import type { SessionManager } from '../sessions/SessionManager';
+import { forgetSession, rememberSessionOwner } from '../sessions/windowSessions';
 import type { KnownHostsRepository } from '../storage/repositories/KnownHostsRepository';
 import type { PathHistoryRepository } from '../storage/repositories/ProjectsRepository';
 import type { SitesRepository } from '../storage/repositories/SitesRepository';
@@ -158,8 +159,14 @@ export function registerAppHandlers(deps: AppIpcDeps): void {
   });
 
   // ── Sesiones y operaciones remotas ──────────────────────────────────────
-  handle(IPC_CHANNELS.SESSION_OPEN, sessionOpenInputSchema, ({ siteId }) => sessions.open(siteId));
+  handle(IPC_CHANNELS.SESSION_OPEN, sessionOpenInputSchema, async ({ siteId }, event) => {
+    const info = await sessions.open(siteId);
+    // Para poder cerrarla si la ventana que la abrió se va.
+    rememberSessionOwner(event.sender, info.sessionId);
+    return info;
+  });
   handle(IPC_CHANNELS.SESSION_CLOSE, sessionIdInputSchema, async ({ sessionId }) => {
+    forgetSession(sessionId);
     await sessions.close(sessionId);
     return null;
   });

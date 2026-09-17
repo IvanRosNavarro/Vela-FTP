@@ -13,6 +13,10 @@ export const SETTING_SCHEMAS = {
   'ui:bottom-panel-height': z.number().int().min(80).max(2000),
   /** Ancho de la sidebar en px. */
   'ui:sidebar-width': z.number().int().min(160).max(600),
+  /** Sidebar reducida a una franja de iconos. */
+  'ui:sidebar-collapsed': z.boolean(),
+  /** Parte del ancho que se lleva el panel local frente al remoto. */
+  'ui:panes-ratio': z.number().min(0.15).max(0.85),
   /** Última carpeta del panel local. */
   'local:last-path': z.string().min(1).max(4096),
   /** Atajos del usuario por id de comando: string = combinación, null = sin atajo. */
@@ -32,6 +36,8 @@ export const SETTING_DEFAULTS: { [K in SettingKey]: SettingValue<K> } = {
   'transfer:conflict-policy': 'ask',
   'ui:bottom-panel-height': 220,
   'ui:sidebar-width': 240,
+  'ui:sidebar-collapsed': false,
+  'ui:panes-ratio': 0.5,
   'local:last-path': '~',
   'shortcuts:custom': {},
   'app:welcomed': false,

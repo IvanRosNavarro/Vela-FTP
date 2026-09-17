@@ -3,7 +3,7 @@ import type { SessionInfo } from '@vela-ftp/shared';
 import { toast } from 'vela-kit/ui';
 import { AppError, call, errorText } from '../lib/ipc';
 import { useDialogStore } from './dialogStore';
-import { remotePaneKey, usePanesStore } from './panesStore';
+import { localPaneKey, remotePaneKey, usePanesStore } from './panesStore';
 import { useSitesStore } from './sitesStore';
 
 interface SessionsState {
@@ -47,6 +47,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
   async connect(siteId) {
     const site = useSitesStore.getState().sites.find((s) => s.id === siteId);
     if (!site || get().connecting) return;
+    const previousActive = get().activeId;
     set({ connecting: siteId });
     try {
       // Hasta 3 vueltas: desbloquear secretos y confirmar huella, cada una una vez.
@@ -61,7 +62,15 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
             toast(`No se pudo abrir ${info.startPath}; se muestra la raíz`, 'warning');
             await usePanesStore.getState().navigate(key, '/');
           }
-          if (info.localStartPath) await usePanesStore.getState().navigate('local', info.localStartPath, { pushHistory: true });
+          // Carpeta local de esta pestaña: la del sitio, o la que se esté viendo ahora.
+          const panes = usePanesStore.getState();
+          const current = panes.panes[localPaneKey(previousActive)]?.path ?? panes.panes.local?.path;
+          const startLocal = info.localStartPath ?? current;
+          if (startLocal) {
+            const localKey = localPaneKey(info.sessionId);
+            panes.ensure(localKey, startLocal);
+            await panes.navigate(localKey, startLocal);
+          }
           toast(`Conectado a ${site.name}`, 'success');
           return;
         } catch (err) {
@@ -104,6 +113,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
 
   markLost(sessionId) {
     usePanesStore.getState().drop(remotePaneKey(sessionId));
+    usePanesStore.getState().drop(localPaneKey(sessionId));
     set((s) => {
       const sessions = s.sessions.filter((x) => x.sessionId !== sessionId);
       const activeId = s.activeId === sessionId ? (sessions.at(-1)?.sessionId ?? null) : s.activeId;

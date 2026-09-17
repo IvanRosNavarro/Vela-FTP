@@ -20,6 +20,7 @@ import { TransferJobsRepository } from './storage/repositories/TransferJobsRepos
 import { QueueMirror } from './transfer/QueueMirror';
 import { TransferHost } from './transfer/TransferHost';
 import { createMainWindow, createShellWindow } from './window/mainWindow';
+import { closeSessionsOfWindow } from './sessions/windowSessions';
 import { EditorManager } from './files/EditorManager';
 import { cleanTempRoot } from './files/tempFiles';
 import { WatchManager } from './files/WatchManager';
@@ -39,6 +40,8 @@ let queue: QueueMirror | null = null;
 let updates: UpdateService | null = null;
 let watches: WatchManager | null = null;
 let sync: SyncManager | null = null;
+/** Abre otra ventana; se asigna al arrancar. */
+let newWindow: (() => void) | null = null;
 
 app.setName('Vela FTP');
 app.setAppUserModelId('com.vela.ftp');
@@ -67,11 +70,16 @@ function setApplicationMenu(): void {
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
-    const [win] = BrowserWindow.getAllWindows();
-    if (!win) return;
-    if (win.isMinimized()) win.restore();
-    win.focus();
+  // Volver a lanzar Vela FTP abre otra ventana; el enlace de vinculación, en
+  // cambio, lo atiende la ventana que ya está delante.
+  app.on('second-instance', (_event, argv) => {
+    if (argv.some((arg) => arg.startsWith('vela-ftp://'))) {
+      const [win] = BrowserWindow.getAllWindows();
+      if (win?.isMinimized()) win.restore();
+      win?.focus();
+      return;
+    }
+    newWindow?.();
   });
 
   void app.whenReady().then(() => {
@@ -148,16 +156,25 @@ if (!app.requestSingleInstanceLock()) {
     registerUpdateHandlers(updates);
     updates.startAutoCheck();
 
-    const registry = buildCommandRegistry();
-    const shortcuts = new ShortcutManager(registry, settings);
-    registerOrganizeHandlers({ sites, projects, bookmarks, history, knownHosts, settings, registry, shortcuts });
-
-    const openWindow = () =>
-      createMainWindow({
+    const openWindow = () => {
+      const win = createMainWindow({
         themeId: settings.get('ui:theme'),
         prefersDark: nativeTheme.shouldUseDarkColors,
         getShortcuts: () => shortcuts.current,
       });
+      const windowId = win.id;
+      // Cada ventana lleva sus conexiones: al cerrarla se sueltan solo las suyas.
+      win.on('closed', () => {
+        if (sessions) void closeSessionsOfWindow(windowId, sessions);
+      });
+      return win;
+    };
+
+    newWindow = () => void openWindow();
+    const registry = buildCommandRegistry(() => newWindow?.());
+    const shortcuts = new ShortcutManager(registry, settings);
+    registerOrganizeHandlers({ sites, projects, bookmarks, history, knownHosts, settings, registry, shortcuts });
+
     openWindow();
 
     app.on('activate', () => {
