@@ -130,6 +130,8 @@ export function App() {
     void call(window.api.watch.list()).then(useWatchStore.getState().setWatches).catch(() => undefined);
     void useSyncStore.getState().load();
     void call(window.api.settings.get('files:open-with')).then(useUiStore.getState().setOpenWith).catch(() => undefined);
+    void call(window.api.settings.get('ui:columns-remote')).then((c) => useUiStore.getState().setColumns('remote', c)).catch(() => undefined);
+    void call(window.api.settings.get('ui:columns-local')).then((c) => useUiStore.getState().setColumns('local', c)).catch(() => undefined);
     // Bienvenida solo la primera vez, y nunca por encima de datos que ya existen.
     void (async () => {
       const seen = await call(window.api.settings.get('app:welcomed')).catch(() => true);

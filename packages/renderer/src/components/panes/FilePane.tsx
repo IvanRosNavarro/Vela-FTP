@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import {
   ArrowLeft,
   ArrowUp,
+  Check,
   Copy,
   Download,
   Eye,
@@ -27,7 +28,8 @@ import { List, useListRef, type RowComponentProps } from 'react-window';
 import type { LocalRoot, RemoteEntry } from '@vela-ftp/shared';
 import { toast } from 'vela-kit/ui';
 import type { CompareStatus } from '../../lib/compare';
-import { formatDate, formatMode, formatSize } from '../../lib/format';
+import { formatSize } from '../../lib/format';
+import { COLUMNS, availableColumns, cellText, gridTemplate, minGridWidth, visibleColumns, type FileColumnId } from '../../lib/columns';
 import { call, errorText } from '../../lib/ipc';
 import { isValidName, localPaths, remotePaths, type PathOps } from '../../lib/paths';
 import { downloadEntries, uploadDroppedFiles, uploadEntries } from '../../lib/transfers';
@@ -78,6 +80,9 @@ const COMPARE_LABELS: Record<CompareStatus, string> = {
 
 interface RowProps {
   entries: RemoteEntry[];
+  /** Columnas visibles, sin el nombre. */
+  columns: FileColumnId[];
+  grid: string;
   compare: Map<string, CompareStatus> | null;
   selected: Set<string>;
   isRemote: boolean;
@@ -90,8 +95,6 @@ interface RowProps {
   onRowDrop: (e: DragEvent, entry: RemoteEntry) => void;
 }
 
-const GRID_REMOTE = 'minmax(0,1fr) 80px 120px 84px';
-const GRID_LOCAL = 'minmax(0,1fr) 80px 120px';
 
 function EntryIcon({ entry }: { entry: RemoteEntry }) {
   if (entry.type === 'dir') return <Folder size={14} className="shrink-0 text-[var(--vela-accent)]" />;
@@ -99,7 +102,7 @@ function EntryIcon({ entry }: { entry: RemoteEntry }) {
   return <File size={14} className="shrink-0 text-[var(--vela-fg-muted)]" />;
 }
 
-function Row({ index, style, ariaAttributes, entries, compare, selected, isRemote, dropTarget, ...handlers }: RowComponentProps<RowProps>) {
+function Row({ index, style, ariaAttributes, entries, columns, grid, compare, selected, isRemote: _isRemote, dropTarget, ...handlers }: RowComponentProps<RowProps>) {
   const entry = entries[index]!;
   const isSelected = selected.has(entry.path);
   const status = compare?.get(entry.name);
@@ -107,7 +110,7 @@ function Row({ index, style, ariaAttributes, entries, compare, selected, isRemot
   return (
     <div
       {...ariaAttributes}
-      style={{ ...style, gridTemplateColumns: isRemote ? GRID_REMOTE : GRID_LOCAL, ...(compareColor ? { background: compareColor } : {}) } as CSSProperties}
+      style={{ ...style, gridTemplateColumns: grid, ...(compareColor ? { background: compareColor } : {}) } as CSSProperties}
       className={`vela-file-row grid cursor-default select-none items-center gap-2 px-2 text-xs ${
         isSelected ? 'bg-[var(--vela-sidebar-active-bg)]' : index % 2 ? 'bg-black/[0.03]' : ''
       } ${dropTarget === entry.path ? 'outline outline-1 outline-[var(--vela-accent)]' : ''}`}
@@ -124,9 +127,19 @@ function Row({ index, style, ariaAttributes, entries, compare, selected, isRemot
         <EntryIcon entry={entry} />
         <span className="truncate">{entry.name}</span>
       </span>
-      <span className="text-right tabular-nums text-[var(--vela-fg-muted)]">{entry.type === 'dir' ? '' : formatSize(entry.size)}</span>
-      <span className="truncate tabular-nums text-[var(--vela-fg-muted)]">{formatDate(entry.modifiedAt)}</span>
-      {isRemote && <span className="font-mono text-[10px] text-[var(--vela-fg-muted)]">{formatMode(entry.mode)}</span>}
+      {columns.map((id) => {
+        const def = COLUMNS[id];
+        const text = cellText(entry, id);
+        return (
+          <span
+            key={id}
+            title={id === 'target' || id === 'owner' || id === 'group' ? text : undefined}
+            className={`truncate tabular-nums text-[var(--vela-fg-muted)] ${def.align === 'right' ? 'text-right' : ''} ${def.mono ? 'font-mono text-[10px]' : ''}`}
+          >
+            {text}
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -143,6 +156,11 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
   const [dragOverPane, setDragOverPane] = useState(false);
   const showMenu = useContextMenu((s) => s.show);
   const openWith = useUiStore((s) => s.openWith);
+  const side = isRemote ? 'remote' : 'local';
+  const chosenColumns = useUiStore((s) => s.columns[side]);
+  const columns = useMemo(() => visibleColumns(chosenColumns, side, window.api.platform), [chosenColumns, side]);
+  const grid = gridTemplate(columns);
+  const minWidth = minGridWidth(columns);
   const paneSiteId = useSessionsStore((s) => (sessionId ? s.sessions.find((x) => x.sessionId === sessionId)?.siteId : undefined));
   const isBookmarked = useSitesStore((s) => !!pane && !!paneSiteId && s.bookmarks.some((b) => b.siteId === paneSiteId && b.remotePath === pane.path));
 
@@ -567,6 +585,25 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
     }
   };
 
+  /** Como en FileZilla: clic derecho en la cabecera para mostrar u ocultar columnas. */
+  const onHeaderContextMenu = (e: MouseEvent) => {
+    e.preventDefault();
+    const toggle = (id: FileColumnId) => {
+      const next = chosenColumns.includes(id) ? chosenColumns.filter((c) => c !== id) : [...chosenColumns, id];
+      useUiStore.getState().setColumns(side, next);
+      void call(window.api.settings.set(isRemote ? 'ui:columns-remote' : 'ui:columns-local', next)).catch((err) => toast(errorText(err), 'error'));
+    };
+    showMenu(
+      e.clientX,
+      e.clientY,
+      availableColumns(side, window.api.platform).map((id) => ({
+        label: COLUMNS[id].label,
+        icon: columns.includes(id) ? <Check size={13} /> : <span className="inline-block w-[13px]" />,
+        onSelect: () => toggle(id),
+      })),
+    );
+  };
+
   const header = (key: SortKey, label: string, className = '') => (
     <button className={`truncate text-left hover:text-[var(--vela-fg)] ${className}`} onClick={() => store().setSort(paneKey, key)}>
       {label}
@@ -620,14 +657,17 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
         </button>
       </div>
 
+      {/* Cabecera y filas se desplazan juntas cuando las columnas no caben. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-x-auto overflow-y-hidden">
+      <div className="flex min-h-0 flex-1 flex-col" style={{ minWidth }}>
       <div
         className="grid gap-2 border-b border-[var(--vela-border)] px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--vela-fg-muted)]"
-        style={{ gridTemplateColumns: isRemote ? GRID_REMOTE : GRID_LOCAL }}
+        style={{ gridTemplateColumns: grid }}
+        title="Clic derecho para elegir las columnas"
+        onContextMenu={onHeaderContextMenu}
       >
         {header('name', 'Nombre')}
-        {header('size', 'Tamaño', 'text-right')}
-        {header('modifiedAt', 'Modificado')}
-        {isRemote && header('mode', 'Permisos')}
+        {columns.map((id) => header(id, COLUMNS[id].label, COLUMNS[id].align === 'right' ? 'text-right' : ''))}
       </div>
 
       <div
@@ -670,6 +710,8 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
             rowHeight={ROW_HEIGHT}
             rowProps={{
               entries,
+              columns,
+              grid,
               compare,
               selected: selectedSet,
               isRemote,
@@ -684,6 +726,8 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
             style={{ height: '100%' }}
           />
         )}
+      </div>
+      </div>
       </div>
 
       <div className="flex justify-between border-t border-[var(--vela-border)] px-2 py-0.5 text-[10px] text-[var(--vela-fg-muted)]">

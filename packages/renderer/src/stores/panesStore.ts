@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 import type { RemoteEntry } from '@vela-ftp/shared';
 import { call, errorText } from '../lib/ipc';
+import { fileType } from '../lib/columns';
 
-export type SortKey = 'name' | 'size' | 'modifiedAt' | 'mode';
+export type SortKey = 'name' | 'size' | 'modifiedAt' | 'mode' | 'type' | 'owner' | 'group' | 'target';
 
 export interface PaneState {
   path: string;
@@ -155,6 +156,8 @@ export function sortEntries(entries: RemoteEntry[], sort: PaneState['sort'], sho
     if (sort.key === 'size') cmp = a.size - b.size;
     else if (sort.key === 'modifiedAt') cmp = (a.modifiedAt ?? 0) - (b.modifiedAt ?? 0);
     else if (sort.key === 'mode') cmp = (a.mode ?? 0) - (b.mode ?? 0);
+    else if (sort.key === 'type') cmp = collator.compare(fileType(a), fileType(b));
+    else if (sort.key === 'owner' || sort.key === 'group' || sort.key === 'target') cmp = collator.compare(a[sort.key] ?? '', b[sort.key] ?? '');
     if (cmp === 0) cmp = collator.compare(a.name, b.name);
     return cmp * factor;
   });
