@@ -172,6 +172,13 @@ export interface FilesApi {
   previewLocal(path: string): Promise<AppResponse<FilePreview>>;
   /** Compara un fichero remoto con uno local en una ventana de diff. */
   diff(sessionId: string, remotePath: string, localPath: string): Promise<AppResponse<null>>;
+  /**
+   * Abre el fichero remoto con el programa predeterminado del sistema. Para
+   * `edit`, lo que se guarde allí se sube (o se pregunta, según el ajuste).
+   */
+  openExternal(sessionId: string, path: string, mode: 'edit' | 'view'): Promise<AppResponse<null>>;
+  /** Sube la copia local de un fichero abierto fuera; `force` pisa cambios ajenos. */
+  uploadExternal(id: string, force: boolean): Promise<AppResponse<null>>;
 }
 
 export interface SyncApi {

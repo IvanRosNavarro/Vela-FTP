@@ -9,7 +9,7 @@ function tempRoot(): string {
 }
 
 /** Carpeta temporal propia; borrarla con `removeTempDir` al terminar. */
-export async function createTempDir(kind: 'edit' | 'preview' | 'diff'): Promise<string> {
+export async function createTempDir(kind: 'edit' | 'preview' | 'diff' | 'external'): Promise<string> {
   const dir = path.join(tempRoot(), kind, randomUUID());
   await mkdir(dir, { recursive: true });
   return dir;

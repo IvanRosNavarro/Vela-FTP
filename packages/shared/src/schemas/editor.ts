@@ -25,6 +25,19 @@ export const editorDirtyInputSchema = z.object({ id: documentId, dirty: z.boolea
 
 export const diffInputSchema = z.object({ sessionId, remotePath, localPath });
 
+export const openExternalInputSchema = z.object({ sessionId, path: remotePath, mode: z.enum(['edit', 'view']) });
+
+export const uploadExternalInputSchema = z.object({ id: documentId, force: z.boolean() });
+
+/** Lo que pasa con un fichero abierto en un programa externo. */
+export interface ExternalFileEvent {
+  kind: 'uploaded' | 'changed' | 'conflict' | 'error';
+  id: string;
+  name: string;
+  siteName: string;
+  message?: string;
+}
+
 export type EditorDocument =
   | {
       id: string;

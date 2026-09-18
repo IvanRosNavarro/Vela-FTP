@@ -116,6 +116,8 @@ const api: PreloadApi = {
     previewRemote: (sessionId, path) => invoke(C.FILES_PREVIEW_REMOTE, { sessionId, path }),
     previewLocal: (path) => invoke(C.FILES_PREVIEW_LOCAL, { path }),
     diff: (sessionId, remotePath, localPath) => invoke(C.FILES_DIFF, { sessionId, remotePath, localPath }),
+    openExternal: (sessionId, path, mode) => invoke(C.FILES_OPEN_EXTERNAL, { sessionId, path, mode }),
+    uploadExternal: (id, force) => invoke(C.FILES_UPLOAD_EXTERNAL, { id, force }),
   },
 
   editor: {
