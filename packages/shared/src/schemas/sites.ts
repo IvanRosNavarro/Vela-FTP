@@ -63,6 +63,9 @@ export interface Site {
   hasPassphrase: boolean;
   createdAt: number;
   updatedAt: number;
+  /** Veces que se ha conectado desde este equipo; no viaja por sincronización. */
+  uses: number;
+  lastUsedAt: number | null;
 }
 
 const id = z.string().min(1).max(100);

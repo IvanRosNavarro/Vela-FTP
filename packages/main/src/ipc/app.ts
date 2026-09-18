@@ -161,6 +161,7 @@ export function registerAppHandlers(deps: AppIpcDeps): void {
   // ── Sesiones y operaciones remotas ──────────────────────────────────────
   handle(IPC_CHANNELS.SESSION_OPEN, sessionOpenInputSchema, async ({ siteId }, event) => {
     const info = await sessions.open(siteId);
+    sites.recordUse(siteId);
     // Para poder cerrarla si la ventana que la abrió se va.
     rememberSessionOwner(event.sender, info.sessionId);
     return info;
