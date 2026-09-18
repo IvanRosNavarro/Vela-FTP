@@ -94,3 +94,34 @@ describe('KnownHostsRepository', () => {
     expect(known.fingerprintsFor('example.com', 2222)).toEqual([]);
   });
 });
+
+describe('uso de los sitios', () => {
+  it('cuenta las conexiones sin tocar el sitio ni lo que se sincroniza', () => {
+    const { repo } = setup();
+    const site = repo.create(base);
+    expect(site.uses).toBe(0);
+    expect(site.lastUsedAt).toBeNull();
+
+    repo.recordUse(site.id);
+    repo.recordUse(site.id);
+    const usado = repo.get(site.id);
+    expect(usado.uses).toBe(2);
+    expect(usado.lastUsedAt).toBeGreaterThan(0);
+
+    // Conectarse no es un cambio del sitio: ni cambia su fecha ni viaja.
+    expect(usado.updatedAt).toBe(site.updatedAt);
+    expect(Object.keys(repo.toSync(usado))).not.toContain('uses');
+    expect(Object.keys(repo.toSync(usado))).not.toContain('lastUsedAt');
+  });
+
+  it('cada sitio lleva su propia cuenta', () => {
+    const { repo } = setup();
+    const uno = repo.create({ ...base, name: 'uno' });
+    const dos = repo.create({ ...base, name: 'dos' });
+    repo.recordUse(dos.id);
+    expect(repo.list().map((s) => [s.name, s.uses])).toEqual([
+      ['uno', 0],
+      ['dos', 1],
+    ]);
+  });
+});

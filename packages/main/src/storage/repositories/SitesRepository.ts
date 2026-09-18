@@ -28,13 +28,17 @@ interface SiteRow {
   updated_at: number;
   has_password: number;
   has_passphrase: number;
+  uses: number | null;
+  last_used_at: number | null;
 }
 
 const SELECT = `
   SELECT s.*,
     EXISTS (SELECT 1 FROM site_secrets x WHERE x.site_id = s.id AND x.kind = 'password') AS has_password,
-    EXISTS (SELECT 1 FROM site_secrets x WHERE x.site_id = s.id AND x.kind = 'passphrase') AS has_passphrase
-  FROM sites s`;
+    EXISTS (SELECT 1 FROM site_secrets x WHERE x.site_id = s.id AND x.kind = 'passphrase') AS has_passphrase,
+    u.uses AS uses, u.last_used_at AS last_used_at
+  FROM sites s
+  LEFT JOIN site_usage u ON u.site_id = s.id`;
 
 function toSite(row: SiteRow): Site {
   return {
@@ -56,6 +60,8 @@ function toSite(row: SiteRow): Site {
     hasPassphrase: row.has_passphrase === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    uses: row.uses ?? 0,
+    lastUsedAt: row.last_used_at,
   };
 }
 
@@ -213,10 +219,23 @@ export class SitesRepository {
 
   // ── Sincronización ─────────────────────────────────────────────────────────
 
-  /** El sitio tal como viaja: sin secretos, que van en su propia entidad. */
+  /** El sitio tal como viaja: sin secretos ni uso local, que son de este equipo. */
   toSync(site: Site): object {
-    const { hasPassword: _p, hasPassphrase: _s, createdAt: _c, ...rest } = site;
+    const { hasPassword: _p, hasPassphrase: _s, createdAt: _c, uses: _u, lastUsedAt: _l, ...rest } = site;
     return rest;
+  }
+
+  /**
+   * Apunta una conexión más. No toca `sites`: su `updated_at` decide quién gana
+   * en la sincronización y conectarse no es un cambio que deba viajar.
+   */
+  recordUse(id: string): void {
+    this.db
+      .prepare(
+        `INSERT INTO site_usage (site_id, uses, last_used_at) VALUES (?, 1, ?)
+         ON CONFLICT(site_id) DO UPDATE SET uses = uses + 1, last_used_at = excluded.last_used_at`,
+      )
+      .run(id, this.now());
   }
 
   /** Secretos descifrados; null si el sitio no tiene o el almacén está bloqueado. */

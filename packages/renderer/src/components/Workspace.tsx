@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { GitCompareArrows, Link2, Plug, Plus, Unplug, X } from 'lucide-react';
+import { GitCompareArrows, Link2, Plus, Unplug, X } from 'lucide-react';
+import { SiteIcon } from './SiteIcon';
+import { QUICK_CONNECT_SITES, mostUsedFirst } from '../lib/quickConnect';
 import { compareListings, type CompareStatus } from '../lib/compare';
 import { toggleSyncBrowsing, useSyncBrowsing } from '../lib/syncBrowsing';
 import { useDialogStore } from '../stores/dialogStore';
@@ -19,15 +21,22 @@ function RemotePlaceholder() {
   const connect = useSessionsStore((s) => s.connect);
   const connecting = useSessionsStore((s) => s.connecting);
   const openDialog = useDialogStore((s) => s.open);
+  const quick = useMemo(() => mostUsedFirst(sites).slice(0, QUICK_CONNECT_SITES), [sites]);
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-xs text-[var(--vela-fg-muted)]">
       <Unplug size={28} className="opacity-50" />
       <p>Sin conexión</p>
       <div className="flex max-w-sm flex-wrap justify-center gap-2">
-        {sites.slice(0, 6).map((site) => (
-          <button key={site.id} className="vf-btn" disabled={connecting !== null} onClick={() => void connect(site.id)}>
-            <Plug size={12} /> {site.name}
+        {quick.map((site) => (
+          <button
+            key={site.id}
+            className="vf-btn"
+            disabled={connecting !== null}
+            title={site.uses > 0 ? `${site.host} · ${site.uses} ${site.uses === 1 ? 'conexión' : 'conexiones'}` : site.host}
+            onClick={() => void connect(site.id)}
+          >
+            <SiteIcon protocol={site.protocol} size={12} /> {site.name}
           </button>
         ))}
         <button className="vf-btn-primary" onClick={() => openDialog({ kind: 'siteEditor', site: null })}>
