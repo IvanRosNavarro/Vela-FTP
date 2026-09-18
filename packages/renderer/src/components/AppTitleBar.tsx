@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowDownCircle, ArrowDownUp, Search } from 'lucide-react';
-import { IPC_EVENTS } from '@vela-ftp/shared';
+import { IPC_EVENTS, PALETTE_SHORTCUT } from '@vela-ftp/shared';
 import { NO_DRAG_STYLE, TitleBar, formatShortcut } from 'vela-kit/ui';
 import velaIcon from '../assets/vela-ftp-icon.png';
 import { formatSpeed } from '../lib/format';
@@ -104,7 +104,7 @@ function PaletteSearch() {
     >
       <Search size={11} className="shrink-0" />
       <span className="truncate">Buscar o ejecutar…</span>
-      <span className="ml-auto hidden shrink-0 opacity-60 sm:inline">{formatShortcut('Ctrl+Shift+P', PLATFORM)}</span>
+      <span className="ml-auto hidden shrink-0 opacity-60 sm:inline">{formatShortcut(PALETTE_SHORTCUT, PLATFORM)}</span>
     </button>
   );
 }

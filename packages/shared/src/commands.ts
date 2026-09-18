@@ -1,5 +1,11 @@
 import { z } from 'zod';
 
+/**
+ * Atajo de la paleta de comandos, el mismo que en Vela Browser. No se puede
+ * reasignar. En macOS es Control+Espacio (no ⌘, que es Spotlight).
+ */
+export const PALETTE_SHORTCUT = 'Ctrl+Space';
+
 export type CommandCategory = 'app' | 'site' | 'navigation' | 'transfer' | 'view' | 'window';
 
 export const COMMAND_CATEGORY_LABELS: Record<CommandCategory, string> = {
