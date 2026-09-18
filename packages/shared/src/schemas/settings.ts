@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+/** Columnas opcionales de los paneles de ficheros; el nombre va siempre. */
+export const FILE_COLUMN_IDS = ['size', 'type', 'modifiedAt', 'mode', 'owner', 'group', 'target'] as const;
+export type FileColumnId = (typeof FILE_COLUMN_IDS)[number];
+const fileColumns = z.array(z.enum(FILE_COLUMN_IDS)).max(FILE_COLUMN_IDS.length);
+
 /**
  * Ajustes conocidos y el schema de su valor. Un ajuste nuevo se declara aquí;
  * el IPC rechaza claves que no estén en esta lista.
@@ -21,6 +26,9 @@ export const SETTING_SCHEMAS = {
   'local:last-path': z.string().min(1).max(4096),
   /** Atajos del usuario por id de comando: string = combinación, null = sin atajo. */
   'shortcuts:custom': z.record(z.string().max(100), z.string().max(50).nullable()),
+  /** Columnas visibles en el panel remoto y en el local (como en FileZilla, cada lado las suyas). */
+  'ui:columns-remote': fileColumns,
+  'ui:columns-local': fileColumns,
   /** Qué abren F4 y Espacio: el editor y la vista previa de Vela FTP, o el programa del sistema. */
   'files:open-with': z.enum(['vela', 'system']),
   /** Al guardar en un programa externo: subir solo o preguntar antes. */
@@ -44,6 +52,8 @@ export const SETTING_DEFAULTS: { [K in SettingKey]: SettingValue<K> } = {
   'ui:panes-ratio': 0.5,
   'local:last-path': '~',
   'shortcuts:custom': {},
+  'ui:columns-remote': ['size', 'modifiedAt', 'mode', 'owner'],
+  'ui:columns-local': ['size', 'modifiedAt'],
   'files:open-with': 'vela',
   'files:external-save': 'upload',
   'app:welcomed': false,
