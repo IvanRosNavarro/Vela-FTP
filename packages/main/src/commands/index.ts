@@ -1,5 +1,5 @@
 import { app, BrowserWindow } from 'electron';
-import { IPC_EVENTS, type CommandAction, type CommandCategory, type CommandInfo } from '@vela-ftp/shared';
+import { IPC_EVENTS, PALETTE_SHORTCUT, type CommandAction, type CommandCategory, type CommandInfo } from '@vela-ftp/shared';
 import { CommandRegistry, ShortcutTable, createCommandDefiner, normalizeShortcutString, registerCommandShortcuts } from 'vela-kit/commands';
 import { logger } from 'vela-kit/logger';
 import type { SettingsRepository } from '../storage/repositories/SettingsRepository';
@@ -14,7 +14,15 @@ export const defineCommand = createCommandDefiner<CommandContext, CommandCategor
 export const suspendedShortcutWindows = new Set<number>();
 
 /** Reservado para la paleta de comandos: no se puede reasignar. */
-export const PALETTE_SHORTCUT = 'Ctrl+Shift+P';
+export { PALETTE_SHORTCUT } from '@vela-ftp/shared';
+
+function sameCombo(a: string, b: string): boolean {
+  try {
+    return normalizeShortcutString(a) === normalizeShortcutString(b);
+  } catch {
+    return false;
+  }
+}
 
 function windowOf(ctx: CommandContext): BrowserWindow | null {
   return ctx.windowId === null ? null : BrowserWindow.fromId(ctx.windowId);
@@ -137,8 +145,10 @@ export class ShortcutManager {
   list(): CommandInfo[] {
     const custom = this.custom();
     return this.registry.list().map((cmd) => {
-      const effective = cmd.id in custom ? (custom[cmd.id] ?? null) : (cmd.defaultShortcut ?? null);
+      const chosen = cmd.id in custom ? (custom[cmd.id] ?? null) : (cmd.defaultShortcut ?? null);
       const reserved = cmd.id === 'app.commandPalette';
+      // Un atajo propio que coincida con el de la paleta queda anulado por ella.
+      const effective = !reserved && chosen !== null && sameCombo(chosen, PALETTE_SHORTCUT) ? null : chosen;
       return {
         id: cmd.id,
         title: cmd.title,

@@ -28,7 +28,9 @@ todos sus servidores a mano.
   `attachShortcuts`; ningún componente registra teclas por su cuenta.
 - Los comandos de interfaz no ejecutan nada en main: emiten
   `command:action` con un `CommandAction` tipado y el renderer lo despacha.
-- `Ctrl+Shift+P` abre la paleta y no es reasignable. Los atajos custom se
+- La paleta tiene un atajo fijo, no reasignable (`PALETTE_SHORTCUT` en
+  shared): `Ctrl+Shift+P` hasta la v1.2.0 y `Ctrl+Space` desde la v1.3.0, el
+  mismo que Vela Browser. Los atajos custom se
   guardan en `shortcuts:custom`; al capturar uno nuevo en Ajustes, main
   suspende los atajos de esa ventana para que la combinación no dispare su
   comando.
