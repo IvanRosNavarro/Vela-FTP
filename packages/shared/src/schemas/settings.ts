@@ -21,6 +21,10 @@ export const SETTING_SCHEMAS = {
   'local:last-path': z.string().min(1).max(4096),
   /** Atajos del usuario por id de comando: string = combinación, null = sin atajo. */
   'shortcuts:custom': z.record(z.string().max(100), z.string().max(50).nullable()),
+  /** Qué abren F4 y Espacio: el editor y la vista previa de Vela FTP, o el programa del sistema. */
+  'files:open-with': z.enum(['vela', 'system']),
+  /** Al guardar en un programa externo: subir solo o preguntar antes. */
+  'files:external-save': z.enum(['upload', 'ask']),
   /** Ya se mostró la bienvenida del primer arranque. */
   'app:welcomed': z.boolean(),
   /** Buscar actualizaciones al arrancar y cada pocas horas. */
@@ -40,6 +44,8 @@ export const SETTING_DEFAULTS: { [K in SettingKey]: SettingValue<K> } = {
   'ui:panes-ratio': 0.5,
   'local:last-path': '~',
   'shortcuts:custom': {},
+  'files:open-with': 'vela',
+  'files:external-save': 'upload',
   'app:welcomed': false,
   'updates:auto-check': true,
 };

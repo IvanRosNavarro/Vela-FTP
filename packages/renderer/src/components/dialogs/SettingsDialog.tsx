@@ -7,6 +7,7 @@ import { AppError, call, errorText } from '../../lib/ipc';
 import { themeManager } from '../../theme';
 import { confirmDialog, useDialogStore } from '../../stores/dialogStore';
 import { useSitesStore } from '../../stores/sitesStore';
+import { useUiStore } from '../../stores/uiStore';
 import { checkForUpdates, downloadUpdate, installUpdate } from '../../lib/updates';
 import { useUpdatesStore } from '../../stores/updatesStore';
 import { SyncSection } from './SyncSection';
@@ -36,9 +37,20 @@ const PLATFORM = window.api.platform;
 
 function GeneralSection() {
   const [policy, setPolicy] = useState<ConflictPolicy>('ask');
+  const openWith = useUiStore((s) => s.openWith);
+  const [externalSave, setExternalSave] = useState<'upload' | 'ask'>('upload');
   useEffect(() => {
     void call(window.api.settings.get('transfer:conflict-policy')).then(setPolicy).catch(() => undefined);
+    void call(window.api.settings.get('files:external-save')).then(setExternalSave).catch(() => undefined);
   }, []);
+  const changeOpenWith = async (value: 'vela' | 'system') => {
+    useUiStore.getState().setOpenWith(value);
+    await call(window.api.settings.set('files:open-with', value)).catch((err) => toast(errorText(err), 'error'));
+  };
+  const changeExternalSave = async (value: 'upload' | 'ask') => {
+    setExternalSave(value);
+    await call(window.api.settings.set('files:external-save', value)).catch((err) => toast(errorText(err), 'error'));
+  };
   const change = async (value: ConflictPolicy) => {
     setPolicy(value);
     await call(window.api.settings.set('transfer:conflict-policy', value)).catch((err) => toast(errorText(err), 'error'));
@@ -57,6 +69,23 @@ function GeneralSection() {
       </label>
       <p className="text-[11px] text-[var(--vela-fg-muted)]">
         Se aplica a las transferencias nuevas. Con «Preguntar», la cola espera tu decisión y puedes aplicarla a todos los conflictos a la vez.
+      </p>
+      <label className="vf-label">
+        Espacio (ver) y F4 (editar) abren los ficheros con
+        <select className="vf-input" value={openWith} onChange={(e) => void changeOpenWith(e.target.value as 'vela' | 'system')}>
+          <option value="vela">El visor y el editor de Vela FTP</option>
+          <option value="system">La aplicación predeterminada del sistema</option>
+        </select>
+      </label>
+      <label className="vf-label">
+        Al guardar un fichero del servidor en otra aplicación
+        <select className="vf-input" value={externalSave} onChange={(e) => void changeExternalSave(e.target.value as 'upload' | 'ask')}>
+          <option value="upload">Subir los cambios automáticamente</option>
+          <option value="ask">Preguntar antes de subir</option>
+        </select>
+      </label>
+      <p className="text-[11px] text-[var(--vela-fg-muted)]">
+        Las dos opciones están siempre en el menú contextual. Si alguien ha cambiado el fichero en el servidor desde que lo abriste, se avisa antes de pisarlo.
       </p>
     </div>
   );

@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { app, BrowserWindow, Menu, nativeTheme } from 'electron';
+import { app, BrowserWindow, Menu, nativeTheme, shell, webContents } from 'electron';
 import { initLogger, logger } from 'vela-kit/logger';
 import { ShortcutManager, buildCommandRegistry } from './commands';
 import { registerOrganizeHandlers } from './ipc/organize';
@@ -22,7 +22,8 @@ import { TransferHost } from './transfer/TransferHost';
 import { createMainWindow, createShellWindow } from './window/mainWindow';
 import { closeSessionsOfWindow } from './sessions/windowSessions';
 import { EditorManager } from './files/EditorManager';
-import { cleanTempRoot } from './files/tempFiles';
+import { ExternalFilesManager } from './files/ExternalFilesManager';
+import { cleanTempRoot, createTempDir } from './files/tempFiles';
 import { WatchManager } from './files/WatchManager';
 import { broadcast } from './ipc/handle';
 import { IPC_EVENTS } from '@vela-ftp/shared';
@@ -40,6 +41,7 @@ let queue: QueueMirror | null = null;
 let updates: UpdateService | null = null;
 let watches: WatchManager | null = null;
 let sync: SyncManager | null = null;
+let external: ExternalFilesManager | null = null;
 /** Abre otra ventana; se asigna al arrancar. */
 let newWindow: (() => void) | null = null;
 
@@ -150,7 +152,20 @@ if (!app.requestSingleInstanceLock()) {
     void sync.restore();
 
     watches = new WatchManager({ transfer, sessions, onChange: (list) => broadcast(IPC_EVENTS.WATCHES_CHANGED, list) });
-    registerFileHandlers(editor, watches);
+    external = new ExternalFilesManager({
+      transfer,
+      sessions,
+      openPath: (p) => shell.openPath(p),
+      createTempDir: () => createTempDir('external'),
+      saveMode: () => settings.get('files:external-save'),
+      // Solo a la ventana que lo abrió: con varias, la pregunta no debe salir en todas.
+      notify: (ownerId, event) => {
+        const owner = webContents.fromId(ownerId);
+        if (owner && !owner.isDestroyed()) owner.send(IPC_EVENTS.EXTERNAL_FILE, event);
+        else broadcast(IPC_EVENTS.EXTERNAL_FILE, event);
+      },
+    });
+    registerFileHandlers(editor, watches, external);
 
     updates = createUpdateService(settings);
     registerUpdateHandlers(updates);
@@ -189,6 +204,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on('will-quit', () => {
     updates?.stop();
     sync?.stop();
+    void external?.stopAll();
     void watches?.stopAll();
     queue?.persist();
     transfer?.stop();

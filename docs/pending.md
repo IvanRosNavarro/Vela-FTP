@@ -9,6 +9,9 @@
   excepción en `main/src/updater/index.ts` al firmar.
 - `.ppk` v3 de PuTTY sin probar con una clave real (ssh2 soporta v2).
 - Modo FTP activo (post-1.0).
+- Ficheros abiertos con el programa del sistema: se dejan de vigilar al cerrar
+  Vela FTP y la copia temporal se borra en el siguiente arranque. Un guardado
+  hecho con Vela FTP cerrado no se sube.
 - Sincronización: el historial de rutas y la cola de transferencias no viajan
   (son de cada equipo). Tampoco hay resolución de conflictos manual: gana la
   modificación más reciente.

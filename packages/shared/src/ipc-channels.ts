@@ -4,6 +4,7 @@ import type { CommandAction } from './commands';
 import type { UpdateStatus } from './updates';
 import type { WatchInfo } from './schemas/watch';
 import type { SyncStatus } from './schemas/sync';
+import type { ExternalFileEvent } from './schemas/editor';
 import type { ConflictInfo, JobSnapshot, ProtocolLogLine, TransferError, TransferErrorCode } from './transfer/types';
 
 export const IPC_CHANNELS = {
@@ -87,6 +88,8 @@ export const IPC_CHANNELS = {
   FILES_PREVIEW_REMOTE: 'files:preview-remote',
   FILES_PREVIEW_LOCAL: 'files:preview-local',
   FILES_DIFF: 'files:diff',
+  FILES_OPEN_EXTERNAL: 'files:open-external',
+  FILES_UPLOAD_EXTERNAL: 'files:upload-external',
   EDITOR_LOAD: 'editor:load',
   EDITOR_SAVE: 'editor:save',
   EDITOR_SET_DIRTY: 'editor:set-dirty',
@@ -127,6 +130,7 @@ export const IPC_EVENTS = {
   EDITOR_CLOSE_REQUESTED: 'state:editor-close-requested',
   WATCHES_CHANGED: 'state:watches-changed',
   SYNC_CHANGED: 'state:sync-changed',
+  EXTERNAL_FILE: 'state:external-file',
   /** La sincronización ha traído datos nuevos: el renderer recarga sitios y marcadores. */
   SYNC_DATA_CHANGED: 'state:sync-data-changed',
 } as const;
@@ -149,6 +153,7 @@ export interface MainEventPayloads {
   [IPC_EVENTS.EDITOR_CLOSE_REQUESTED]: null;
   [IPC_EVENTS.WATCHES_CHANGED]: WatchInfo[];
   [IPC_EVENTS.SYNC_CHANGED]: SyncStatus;
+  [IPC_EVENTS.EXTERNAL_FILE]: ExternalFileEvent;
   [IPC_EVENTS.SYNC_DATA_CHANGED]: null;
 }
 

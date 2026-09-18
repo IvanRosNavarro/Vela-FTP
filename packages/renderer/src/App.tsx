@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { IPC_EVENTS, type JobSnapshot, type SettingKey, type UpdateStatus } from '@vela-ftp/shared';
+import { IPC_EVENTS, type ExternalFileEvent, type JobSnapshot, type SettingKey, type UpdateStatus } from '@vela-ftp/shared';
 import { toast } from 'vela-kit/ui';
 import { AppTitleBar } from './components/AppTitleBar';
 import { ContextMenuHost } from './components/ContextMenu';
@@ -8,7 +8,7 @@ import { BottomPanel } from './components/queue/BottomPanel';
 import { SitesSidebar } from './components/SitesSidebar';
 import { Splitter } from './components/Splitter';
 import { Workspace } from './components/Workspace';
-import { call, describeError } from './lib/ipc';
+import { call, describeError, errorText } from './lib/ipc';
 import { localPaths, remotePaths } from './lib/paths';
 import { localPaneKey, remotePaneKey, usePanesStore } from './stores/panesStore';
 import { useQueueStore } from './stores/queueStore';
@@ -20,7 +20,7 @@ import { createUpdateNotifier } from './lib/updates';
 import { useUpdatesStore } from './stores/updatesStore';
 import { useWatchStore } from './stores/watchStore';
 import { useSyncStore } from './stores/syncStore';
-import { useDialogStore } from './stores/dialogStore';
+import { confirmDialog, useDialogStore } from './stores/dialogStore';
 
 async function readSetting<K extends 'ui:bottom-panel-height' | 'ui:sidebar-width' | 'ui:sidebar-collapsed' | 'local:last-path'>(key: K) {
   const res = await window.api.settings.get(key);
@@ -61,6 +61,42 @@ function useRefreshAfterTransfers() {
   }, []);
 }
 
+/** Lo que pasa con los ficheros abiertos en otra aplicación. */
+async function onExternalFile(event: ExternalFileEvent): Promise<void> {
+  const upload = (force: boolean) =>
+    void call(window.api.files.uploadExternal(event.id, force)).catch((err) => toast(`No se pudo subir ${event.name}: ${errorText(err)}`, 'error'));
+  switch (event.kind) {
+    case 'uploaded':
+      toast(`${event.name} subido a ${event.siteName}`, 'success');
+      return;
+    case 'changed':
+      if (
+        await confirmDialog({
+          title: 'Subir los cambios',
+          message: `Has guardado ${event.name}. ¿Subirlo a ${event.siteName}?`,
+          confirmLabel: 'Subir',
+          danger: false,
+        })
+      )
+        upload(false);
+      return;
+    case 'conflict':
+      if (
+        await confirmDialog({
+          title: 'El fichero cambió en el servidor',
+          message: `Alguien ha modificado ${event.name} en ${event.siteName} desde que lo abriste. Si lo subes, sus cambios se perderán.`,
+          confirmLabel: 'Sobrescribir',
+          danger: true,
+        })
+      )
+        upload(true);
+      return;
+    case 'error':
+      toast(`No se pudo subir ${event.name}: ${event.message ?? 'error desconocido'}`, 'error');
+      return;
+  }
+}
+
 export function App() {
   const [sidebarWidth, setSidebarWidth] = useState(240);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -93,6 +129,7 @@ export function App() {
     void call(window.api.updates.status()).then(applyUpdateStatus).catch(() => undefined);
     void call(window.api.watch.list()).then(useWatchStore.getState().setWatches).catch(() => undefined);
     void useSyncStore.getState().load();
+    void call(window.api.settings.get('files:open-with')).then(useUiStore.getState().setOpenWith).catch(() => undefined);
     // Bienvenida solo la primera vez, y nunca por encima de datos que ya existen.
     void (async () => {
       const seen = await call(window.api.settings.get('app:welcomed')).catch(() => true);
@@ -147,6 +184,7 @@ export function App() {
           );
         }
       }),
+      window.api.on(IPC_EVENTS.EXTERNAL_FILE, (event) => void onExternalFile(event)),
       window.api.on(IPC_EVENTS.SYNC_DATA_CHANGED, () => {
         const sitesStore = useSitesStore.getState();
         void sitesStore.loadSites();

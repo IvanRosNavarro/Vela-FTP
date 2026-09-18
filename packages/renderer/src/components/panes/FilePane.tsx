@@ -35,6 +35,7 @@ import { writeClipboardText } from '../../lib/clipboard';
 import { confirmDialog, promptDialog, useDialogStore } from '../../stores/dialogStore';
 import { isRemotePane, localPaneKey, remotePaneKey, sessionOfPane, sortEntries, usePanesStore, type PaneKey, type SortKey } from '../../stores/panesStore';
 import { useSessionsStore } from '../../stores/sessionsStore';
+import { useUiStore } from '../../stores/uiStore';
 import { useSitesStore } from '../../stores/sitesStore';
 import { startWatch } from '../../stores/watchStore';
 import { addBookmarkFor } from '../../lib/bookmarks';
@@ -141,6 +142,7 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [dragOverPane, setDragOverPane] = useState(false);
   const showMenu = useContextMenu((s) => s.show);
+  const openWith = useUiStore((s) => s.openWith);
   const paneSiteId = useSessionsStore((s) => (sessionId ? s.sessions.find((x) => x.sessionId === sessionId)?.siteId : undefined));
   const isBookmarked = useSitesStore((s) => !!pane && !!paneSiteId && s.bookmarks.some((b) => b.siteId === paneSiteId && b.remotePath === pane.path));
 
@@ -211,6 +213,20 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
     if (!isRemote || !sessionId || entry.type === 'dir') return;
     void call(window.api.files.editRemote(sessionId, entry.path)).catch((err) => toast(`No se pudo abrir: ${errorText(err)}`, 'error'));
   };
+
+  /**
+   * Con el programa del sistema. Un remoto se baja a una copia temporal; para
+   * editar, lo que se guarde allí vuelve al servidor.
+   */
+  const openWithSystem = (entry: RemoteEntry, mode: 'edit' | 'view') => {
+    if (entry.type === 'dir') return;
+    const request = isRemote && sessionId ? window.api.files.openExternal(sessionId, entry.path, mode) : window.api.local.open(entry.path);
+    void call(request).catch((err) => toast(`No se pudo abrir: ${errorText(err)}`, 'error'));
+  };
+
+  /** Espacio y F4 abren lo que diga el ajuste: Vela FTP o el programa del sistema. */
+  const viewEntry = (entry: RemoteEntry) => (openWith === 'system' ? openWithSystem(entry, 'view') : preview(entry));
+  const editEntry = (entry: RemoteEntry) => (openWith === 'system' ? openWithSystem(entry, 'edit') : edit(entry));
 
   /** El fichero con el mismo nombre en la carpeta del otro panel, si existe. */
   const counterpart = (entry: RemoteEntry): { sessionId: string; remotePath: string; localPath: string } | null => {
@@ -333,8 +349,28 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
       },
       ...(single && single.type !== 'dir'
         ? [
-            { label: 'Vista previa', icon: <ScanEye size={13} />, shortcut: 'Espacio', onSelect: () => preview(single) },
-            ...(isRemote ? [{ label: 'Editar', icon: <FileCode size={13} />, shortcut: 'F4', onSelect: () => edit(single) }] : []),
+            {
+              label: 'Vista previa',
+              icon: <ScanEye size={13} />,
+              ...(openWith === 'vela' ? { shortcut: 'Espacio' } : {}),
+              onSelect: () => preview(single),
+            },
+            ...(isRemote
+              ? [
+                  {
+                    label: 'Editar en Vela FTP',
+                    icon: <FileCode size={13} />,
+                    ...(openWith === 'vela' ? { shortcut: 'F4' } : {}),
+                    onSelect: () => edit(single),
+                  },
+                  {
+                    label: 'Abrir con la aplicación predeterminada',
+                    icon: <ExternalLink size={13} />,
+                    ...(openWith === 'system' ? { shortcut: 'F4' } : {}),
+                    onSelect: () => openWithSystem(single, 'edit'),
+                  },
+                ]
+              : []),
             {
               label: isRemote ? 'Comparar con el fichero local' : 'Comparar con el fichero del servidor',
               icon: <GitCompareArrows size={13} />,
@@ -504,13 +540,13 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
         const current = selectedEntries();
         if (current.length !== 1) return;
         e.preventDefault();
-        return preview(current[0]!);
+        return viewEntry(current[0]!);
       }
       case 'F4': {
         const current = selectedEntries();
-        if (current.length !== 1 || !isRemote) return;
+        if (current.length !== 1 || (!isRemote && openWith === 'vela')) return;
         e.preventDefault();
-        return edit(current[0]!);
+        return editEntry(current[0]!);
       }
       default:
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {

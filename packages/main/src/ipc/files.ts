@@ -5,15 +5,27 @@ import {
   editorIdInputSchema,
   editorSaveInputSchema,
   localPathInputSchema,
+  openExternalInputSchema,
+  uploadExternalInputSchema,
   remotePathInputSchema,
   watchIdInputSchema,
   watchStartInputSchema,
 } from '@vela-ftp/shared';
 import type { EditorManager } from '../files/EditorManager';
 import type { WatchManager } from '../files/WatchManager';
+import type { ExternalFilesManager } from '../files/ExternalFilesManager';
 import { handle } from './handle';
 
-export function registerFileHandlers(editor: EditorManager, watches: WatchManager): void {
+export function registerFileHandlers(editor: EditorManager, watches: WatchManager, external: ExternalFilesManager): void {
+  handle(IPC_CHANNELS.FILES_OPEN_EXTERNAL, openExternalInputSchema, async ({ sessionId, path, mode }, event) => {
+    await external.open(event.sender.id, sessionId, path, mode);
+    return null;
+  });
+  handle(IPC_CHANNELS.FILES_UPLOAD_EXTERNAL, uploadExternalInputSchema, async ({ id, force }) => {
+    await external.upload(id, force);
+    return null;
+  });
+
   handle(IPC_CHANNELS.WATCH_LIST, null, () => watches.list());
   handle(IPC_CHANNELS.WATCH_START, watchStartInputSchema, ({ sessionId, localDir, remoteDir }) => watches.start(sessionId, localDir, remoteDir));
   handle(IPC_CHANNELS.WATCH_STOP, watchIdInputSchema, async ({ id }) => {

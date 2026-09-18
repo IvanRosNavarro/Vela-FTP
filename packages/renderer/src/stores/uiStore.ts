@@ -15,7 +15,10 @@ interface UiState {
   /** Colorear las diferencias entre el panel local y el remoto activo. */
   compareMode: boolean;
   syncBrowsing: SyncBrowsing | null;
+  /** Qué abren F4 y Espacio (ajuste `files:open-with`). */
+  openWith: 'vela' | 'system';
   setFocusedPane(pane: 'local' | 'remote'): void;
+  setOpenWith(openWith: 'vela' | 'system'): void;
   toggleBottomPanel(): void;
   toggleCompare(): void;
   setSyncBrowsing(sync: SyncBrowsing | null): void;
@@ -26,7 +29,9 @@ export const useUiStore = create<UiState>((set) => ({
   bottomPanelVisible: true,
   compareMode: false,
   syncBrowsing: null,
+  openWith: 'vela',
   setFocusedPane: (focusedPane) => set({ focusedPane }),
+  setOpenWith: (openWith) => set({ openWith }),
   toggleBottomPanel: () => set((s) => ({ bottomPanelVisible: !s.bottomPanelVisible })),
   toggleCompare: () => set((s) => ({ compareMode: !s.compareMode })),
   setSyncBrowsing: (syncBrowsing) => set({ syncBrowsing }),
