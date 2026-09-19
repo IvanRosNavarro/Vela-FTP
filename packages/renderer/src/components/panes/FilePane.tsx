@@ -45,6 +45,12 @@ import { useContextMenu, type MenuItem } from '../ContextMenu';
 import { PathInput } from './PathInput';
 
 const ROW_HEIGHT = 24;
+/**
+ * Ventana para acumular letras al buscar por teclado ("or" debe llevar a
+ * «order», no saltar de la o a la r y parar en «render»). Pasado este tiempo
+ * sin teclear, la siguiente letra empieza una búsqueda nueva.
+ */
+const TYPEAHEAD_TIMEOUT = 1000;
 const DRAG_MIME = 'application/x-vela-ftp-entries';
 const IS_WINDOWS = window.api.platform === 'win32';
 
@@ -151,6 +157,7 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
   const ops: PathOps = isRemote ? remotePaths : localPaths(window.api.local.separator);
   const listRef = useListRef(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<{ buffer: string; at: number; anchor: number }>({ buffer: '', at: 0, anchor: -1 });
   const [roots, setRoots] = useState<LocalRoot[]>([]);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [dragOverPane, setDragOverPane] = useState(false);
@@ -575,11 +582,21 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
           );
           return;
         }
-        // Buscar por la primera letra, como los exploradores.
+        // Buscar por nombre según se teclea, como los exploradores.
         if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-          const letter = e.key.toLowerCase();
-          const start = index + 1;
-          const match = [...entries.slice(start), ...entries.slice(0, start)].find((x) => x.name.toLowerCase().startsWith(letter));
+          const key = e.key.toLowerCase();
+          const now = Date.now();
+          const state = searchRef.current;
+          const continuing = now - state.at < TYPEAHEAD_TIMEOUT;
+          // Repetir la misma letra cicla entre las coincidencias (como pulsar
+          // "r" varias veces para pasar de un «render» al siguiente); cualquier
+          // otra letra amplía la búsqueda ("o" y luego "r" busca "or").
+          const repeatingSameLetter = continuing && state.buffer.length > 0 && [...state.buffer].every((c) => c === key);
+          const buffer = continuing && !repeatingSameLetter ? state.buffer + key : key;
+          const anchor = repeatingSameLetter ? index : continuing ? state.anchor : index;
+          searchRef.current = { buffer, at: now, anchor };
+          const start = anchor + 1;
+          const match = [...entries.slice(start), ...entries.slice(0, start)].find((x) => x.name.toLowerCase().startsWith(buffer));
           if (match) moveTo(entries.indexOf(match));
         }
     }
