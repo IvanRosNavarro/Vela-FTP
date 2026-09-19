@@ -1,7 +1,7 @@
-import { mkdir, readdir, lstat, rename, stat } from 'node:fs/promises';
+import { cp, mkdir, readdir, lstat, rename, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { BrowserWindow, dialog, shell } from 'electron';
+import { app as electronApp, BrowserWindow, dialog, nativeImage, shell } from 'electron';
 import {
   IPC_CHANNELS,
   IPC_EVENTS,
@@ -23,7 +23,9 @@ import {
   siteIdInputSchema,
   siteInputSchema,
   siteMoveInputSchema,
+  localCopyIntoInputSchema,
   siteUpdateInputSchema,
+  startDragInputSchema,
   trustFingerprintInputSchema,
   unlockInputSchema,
   type LocalEntry,
@@ -100,6 +102,21 @@ async function localRoots(): Promise<LocalRoot[]> {
     }),
   );
   return [{ path: os.homedir(), label: 'Inicio' }, ...found.filter((r): r is LocalRoot => r !== null)];
+}
+
+// startDrag exige un icono no vacío; app.getFileIcon debería bastar siempre, pero
+// por si el SO no da uno hace falta un respaldo (un píxel transparente).
+const FALLBACK_DRAG_ICON = nativeImage.createFromDataURL(
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+);
+
+async function dragIcon(path: string) {
+  try {
+    const icon = await electronApp.getFileIcon(path, { size: 'normal' });
+    return icon.isEmpty() ? FALLBACK_DRAG_ICON : icon;
+  } catch {
+    return FALLBACK_DRAG_ICON;
+  }
 }
 
 export function registerAppHandlers(deps: AppIpcDeps): void {
@@ -214,6 +231,24 @@ export function registerAppHandlers(deps: AppIpcDeps): void {
   handle(IPC_CHANNELS.LOCAL_REVEAL, localPathInputSchema, ({ path: p }) => {
     shell.showItemInFolder(p);
     return null;
+  });
+  handle(IPC_CHANNELS.LOCAL_START_DRAG, startDragInputSchema, async ({ paths }, event) => {
+    // `files` manda sobre `file` cuando hay más de uno, pero el tipo lo exige igualmente.
+    event.sender.startDrag({ file: paths[0]!, files: paths, icon: await dragIcon(paths[0]!) });
+    return null;
+  });
+  handle(IPC_CHANNELS.LOCAL_COPY_INTO, localCopyIntoInputSchema, async ({ paths, targetDir }) => {
+    let skipped = 0;
+    for (const src of paths) {
+      const dest = path.join(targetDir, path.basename(src));
+      // No se pisa lo que ya exista: sin diálogo de conflicto, mejor no tocarlo.
+      if (await stat(dest).then(() => true).catch(() => false)) {
+        skipped++;
+        continue;
+      }
+      await cp(src, dest, { recursive: true });
+    }
+    return { skipped };
   });
 
   // ── Cola ────────────────────────────────────────────────────────────────

@@ -42,6 +42,20 @@ export const localPathInputSchema = z.object({ path: localPath });
 export const localRenameInputSchema = z.object({ from: localPath, to: localPath });
 export const localDeleteInputSchema = z.object({ paths: z.array(localPath).min(1).max(10_000) });
 
+/** Arrastre nativo fuera de la ventana (al Explorador, a otro programa…). */
+export const startDragInputSchema = z.object({ paths: z.array(localPath).min(1).max(200) });
+
+/** Copia ficheros del SO (soltados desde el Explorador) dentro de una carpeta local. */
+export const localCopyIntoInputSchema = z.object({ paths: z.array(localPath).min(1).max(10_000), targetDir: localPath });
+
+/** Copia de ficheros remotos a un temporal para poder arrastrarlos fuera. */
+export const prepareDragInputSchema = z.object({
+  sessionId,
+  items: z.array(z.object({ path: remotePath, name: z.string().min(1).max(1024) })).min(1).max(200),
+});
+/** Un elemento por cada pedido; `null` si no se pudo bajar. */
+export type PreparedDragFile = { path: string; name: string } | null;
+
 export const enqueueInputSchema = z.object({
   sessionId,
   conflictPolicy: conflictPolicySchema,

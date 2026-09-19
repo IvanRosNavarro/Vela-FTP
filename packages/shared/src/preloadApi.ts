@@ -14,6 +14,7 @@ import type {
   ProjectInput,
   LocalEntry,
   LocalRoot,
+  PreparedDragFile,
   SessionInfo,
   SettingKey,
   SettingValue,
@@ -146,6 +147,10 @@ export interface LocalApi {
   reveal(path: string): Promise<AppResponse<null>>;
   /** Ruta de un File arrastrado desde el explorador del SO. */
   pathForFile(file: File): string;
+  /** Arrastre nativo de estos ficheros fuera de la ventana (Explorador, otro programa…). */
+  startDrag(paths: string[]): Promise<AppResponse<null>>;
+  /** Copia ficheros del SO (soltados desde el Explorador) dentro de `targetDir`; cuenta los que ya existían y no se tocaron. */
+  copyInto(paths: string[], targetDir: string): Promise<AppResponse<{ skipped: number }>>;
   separator: '/' | '\\';
 }
 
@@ -179,6 +184,8 @@ export interface FilesApi {
   openExternal(sessionId: string, path: string, mode: 'edit' | 'view'): Promise<AppResponse<null>>;
   /** Sube la copia local de un fichero abierto fuera; `force` pisa cambios ajenos. */
   uploadExternal(id: string, force: boolean): Promise<AppResponse<null>>;
+  /** Baja estos remotos a un temporal para poder arrastrarlos fuera de Vela FTP. */
+  prepareDrag(sessionId: string, items: Array<{ path: string; name: string }>): Promise<AppResponse<PreparedDragFile[]>>;
 }
 
 export interface SyncApi {

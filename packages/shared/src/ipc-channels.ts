@@ -73,6 +73,8 @@ export const IPC_CHANNELS = {
   LOCAL_TRASH: 'local:trash',
   LOCAL_OPEN: 'local:open',
   LOCAL_REVEAL: 'local:reveal',
+  LOCAL_START_DRAG: 'local:start-drag',
+  LOCAL_COPY_INTO: 'local:copy-into',
 
   QUEUE_ENQUEUE: 'queue:enqueue',
   QUEUE_CANCEL: 'queue:cancel',
@@ -90,6 +92,7 @@ export const IPC_CHANNELS = {
   FILES_DIFF: 'files:diff',
   FILES_OPEN_EXTERNAL: 'files:open-external',
   FILES_UPLOAD_EXTERNAL: 'files:upload-external',
+  FILES_PREPARE_DRAG: 'files:prepare-drag',
   EDITOR_LOAD: 'editor:load',
   EDITOR_SAVE: 'editor:save',
   EDITOR_SET_DIRTY: 'editor:set-dirty',

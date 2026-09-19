@@ -99,6 +99,8 @@ interface RowProps {
   onRowDragStart: (e: DragEvent, entry: RemoteEntry) => void;
   onRowDragOver: (e: DragEvent, entry: RemoteEntry) => void;
   onRowDrop: (e: DragEvent, entry: RemoteEntry) => void;
+  onRowDrag: (e: DragEvent, entry: RemoteEntry) => void;
+  onRowDragEnd: (e: DragEvent, entry: RemoteEntry) => void;
 }
 
 
@@ -127,6 +129,8 @@ function Row({ index, style, ariaAttributes, entries, columns, grid, compare, se
       onDragStart={(e) => handlers.onRowDragStart(e, entry)}
       onDragOver={(e) => handlers.onRowDragOver(e, entry)}
       onDrop={(e) => handlers.onRowDrop(e, entry)}
+      onDrag={(e) => handlers.onRowDrag(e, entry)}
+      onDragEnd={(e) => handlers.onRowDragEnd(e, entry)}
       title={[entry.target ? `${entry.name} → ${entry.target}` : entry.name, status ? COMPARE_LABELS[status] : null].filter(Boolean).join('\n')}
     >
       <span className="flex min-w-0 items-center gap-1.5">
@@ -158,6 +162,10 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
   const listRef = useListRef(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<{ buffer: string; at: number; anchor: number }>({ buffer: '', at: 0, anchor: -1 });
+  /** Remotos ya bajados a un temporal para poder arrastrarlos fuera de la ventana. */
+  const dragPrimed = useRef<Map<string, { path: string; name: string }>>(new Map());
+  /** Ya se cedió este arrastre al SO: no repetirlo en cada evento `drag`. */
+  const nativeDragStarted = useRef(false);
   const [roots, setRoots] = useState<LocalRoot[]>([]);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [dragOverPane, setDragOverPane] = useState(false);
@@ -466,13 +474,33 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
     const payload: DragPayload = { paneKey, paths };
     e.dataTransfer.setData(DRAG_MIME, JSON.stringify(payload));
     e.dataTransfer.effectAllowed = 'copy';
+    nativeDragStarted.current = false;
+  };
+
+  /** Ficheros en disco de lo que se arrastra, o null si algún remoto no está bajado aún. */
+  const draggedFilesOnDisk = (entry: RemoteEntry): string[] | null => {
+    const paths = selectedSet.has(entry.path) ? pane.selected : [entry.path];
+    if (!isRemote) return paths;
+    const primed = paths.map((p) => dragPrimed.current.get(p)?.path).filter((p): p is string => !!p);
+    return primed.length === paths.length ? primed : null;
+  };
+
+  /**
+   * El arrastre nativo del SO se cede solo al salir el puntero de la ventana:
+   * dentro manda el arrastre normal (soltar en el otro panel), que no bloquea
+   * el proceso main como sí hace el nativo mientras dura el gesto.
+   */
+  const onRowDrag = (e: DragEvent, entry: RemoteEntry) => {
+    if (nativeDragStarted.current || !pointerOutsideWindow(e)) return;
+    const files = draggedFilesOnDisk(entry);
+    if (!files || files.length === 0) return;
+    nativeDragStarted.current = true;
+    void window.api.local.startDrag(files);
   };
 
   const acceptsDrag = (e: DragEvent) => {
     const types = Array.from(e.dataTransfer.types);
-    if (types.includes(DRAG_MIME)) return true;
-    // Ficheros del explorador del SO: solo tiene sentido soltarlos en remoto.
-    return isRemote && types.includes('Files');
+    return types.includes(DRAG_MIME) || types.includes('Files');
   };
 
   const handleDrop = async (e: DragEvent, targetDir: string) => {
@@ -491,10 +519,23 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
       if (!isRemote && isRemotePane(payload.paneKey) && sourceSession) await downloadEntries(sourceSession, items, targetDir);
       return;
     }
-    if (isRemote && sessionId && e.dataTransfer.files.length > 0) {
-      await uploadDroppedFiles(sessionId, e.dataTransfer.files, targetDir, (p) =>
-        window.api.local.list(p).then((r) => r.ok),
-      );
+    if (e.dataTransfer.files.length === 0) return;
+    if (isRemote && sessionId) {
+      await uploadDroppedFiles(sessionId, e.dataTransfer.files, targetDir, (p) => window.api.local.list(p).then((r) => r.ok));
+      return;
+    }
+    if (!isRemote) {
+      const paths = Array.from(e.dataTransfer.files)
+        .map((f) => window.api.local.pathForFile(f))
+        .filter(Boolean);
+      if (paths.length === 0) return;
+      const res = await call(window.api.local.copyInto(paths, targetDir)).catch((err) => {
+        toast(`No se pudo copiar: ${errorText(err)}`, 'error');
+        return null;
+      });
+      if (!res) return;
+      if (res.skipped > 0) toast(`${res.skipped} ya existían y no se han copiado`, 'warning');
+      await store().refresh(paneKey);
     }
   };
 
@@ -502,6 +543,7 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
     if (!acceptsDrag(e)) return;
     e.preventDefault();
     e.stopPropagation();
+    e.dataTransfer.dropEffect = 'copy';
     setDragOverPane(true);
     setDropTarget(entry.type === 'dir' ? entry.path : null);
   };
@@ -509,6 +551,55 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
   const onRowDrop = (e: DragEvent, entry: RemoteEntry) => {
     e.stopPropagation();
     void handleDrop(e, entry.type === 'dir' ? entry.path : pane.path);
+  };
+
+  /**
+   * El puntero está fuera de la ventana. Chromium manda (0,0) en algunos
+   * eventos de arrastre: eso no es una posición, así que no cuenta.
+   */
+  const pointerOutsideWindow = (e: DragEvent) =>
+    !(e.screenX === 0 && e.screenY === 0) &&
+    (e.screenX < window.screenX ||
+      e.screenY < window.screenY ||
+      e.screenX > window.screenX + window.outerWidth ||
+      e.screenY > window.screenY + window.outerHeight);
+
+  /**
+   * Los remotos no existen en disco: para arrastrarlos fuera de Vela FTP hay
+   * que bajarlos antes a un temporal. No se puede hacer en el mismo gesto (el
+   * arrastre nativo del SO exige el fichero ya en disco), así que el primer
+   * intento los prepara y el siguiente arrastre ya sale de verdad.
+   */
+  const primeRemoteDrag = async (items: RemoteEntry[]) => {
+    const paneSession = sessionOfPane(paneKey);
+    if (!paneSession) return;
+    const res = await call(window.api.files.prepareDrag(paneSession, items.map((x) => ({ path: x.path, name: x.name })))).catch((err) => {
+      toast(`No se pudo preparar para arrastrar: ${errorText(err)}`, 'error');
+      return null;
+    });
+    if (!res) return;
+    let ready = 0;
+    items.forEach((item, i) => {
+      const file = res[i];
+      if (file) {
+        dragPrimed.current.set(item.path, file);
+        ready++;
+      }
+    });
+    if (ready > 0) {
+      toast(ready === 1 ? 'Listo: vuelve a arrastrarlo fuera de Vela FTP' : `${ready} ficheros listos: vuelve a arrastrarlos fuera de Vela FTP`, 'info');
+    }
+  };
+
+  const onRowDragEnd = (e: DragEvent, entry: RemoteEntry) => {
+    const startedNative = nativeDragStarted.current;
+    nativeDragStarted.current = false;
+    // Solo interesa el remoto que se soltó fuera sin que nadie lo aceptase:
+    // es que aún no estaba bajado y hay que prepararlo para el próximo intento.
+    if (!isRemote || startedNative || e.dataTransfer.dropEffect !== 'none' || !pointerOutsideWindow(e)) return;
+    const items = (selectedSet.has(entry.path) ? selectedEntries() : [entry]).filter((x) => x.type !== 'dir');
+    if (items.length === 0 || items.every((x) => dragPrimed.current.has(x.path))) return;
+    void primeRemoteDrag(items);
   };
 
   // ── Teclado ────────────────────────────────────────────────────────────
@@ -698,6 +789,7 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
         onDragOver={(e) => {
           if (!acceptsDrag(e)) return;
           e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
           setDragOverPane(true);
           setDropTarget(null);
         }}
@@ -739,6 +831,8 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
               onRowDragStart,
               onRowDragOver,
               onRowDrop,
+              onRowDrag,
+              onRowDragEnd,
             }}
             style={{ height: '100%' }}
           />
