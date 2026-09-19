@@ -15,8 +15,10 @@
 - Sincronización: el historial de rutas y la cola de transferencias no viajan
   (son de cada equipo). Tampoco hay resolución de conflictos manual: gana la
   modificación más reciente.
-- Arrastrar ficheros remotos al explorador del SO (requiere descargar antes a
-  una carpeta temporal).
+- Arrastrar un remoto fuera de Vela FTP va en dos pasos: el primer arrastre lo
+  baja a un temporal y el segundo ya lo saca. El arrastre nativo del SO exige
+  el fichero en disco y Electron no expone la entrega diferida de Windows. Solo
+  ficheros sueltos, no carpetas.
 - Mover ficheros arrastrando dentro del mismo panel.
 - Vigilancia de carpetas: no propaga borrados ni sobrevive a un reinicio.
 - Los paneles no se refrescan solos con cambios del disco local ni al crear

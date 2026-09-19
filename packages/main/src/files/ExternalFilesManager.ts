@@ -96,6 +96,29 @@ export class ExternalFilesManager {
     await this.launch(localPath);
   }
 
+  /**
+   * Baja estos remotos a un temporal para poder arrastrarlos fuera de la
+   * ventana (el arrastre nativo del SO solo puede empezar con ficheros que ya
+   * existan en disco). Un `null` por cada uno que no se haya podido bajar.
+   */
+  async prepareForDrag(sessionId: string, items: { path: string; name: string }[]): Promise<({ path: string; name: string } | null)[]> {
+    const session = this.deps.sessions.get(sessionId);
+    if (!session) throw new TransferRequestError({ code: 'NOT_CONNECTED', message: 'La sesión no está abierta' });
+    const dir = await this.deps.createTempDir();
+    const results: ({ path: string; name: string } | null)[] = [];
+    for (const item of items) {
+      const localPath = path.join(dir, item.name);
+      try {
+        await this.deps.transfer.request('file.fetch', { sessionId, path: item.path, localPath, maxBytes: EXTERNAL_MAX_BYTES });
+        results.push({ path: localPath, name: item.name });
+      } catch (err) {
+        logger.warn(`[external] no se pudo preparar ${item.path} para arrastrar`, err);
+        results.push(null);
+      }
+    }
+    return results;
+  }
+
   private async launch(localPath: string): Promise<void> {
     const error = await this.deps.openPath(localPath);
     if (error) throw new Error(`No hay ningún programa para abrir ${path.basename(localPath)}: ${error}`);

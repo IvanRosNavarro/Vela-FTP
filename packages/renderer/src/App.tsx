@@ -10,7 +10,7 @@ import { Splitter } from './components/Splitter';
 import { Workspace } from './components/Workspace';
 import { call, describeError, errorText } from './lib/ipc';
 import { localPaths, remotePaths } from './lib/paths';
-import { localPaneKey, remotePaneKey, usePanesStore } from './stores/panesStore';
+import { localPaneKey, remotePaneKey, usePanesStore, type PaneKey } from './stores/panesStore';
 import { useQueueStore } from './stores/queueStore';
 import { useSessionsStore } from './stores/sessionsStore';
 import { useSitesStore } from './stores/sitesStore';
@@ -29,34 +29,56 @@ async function readSetting<K extends 'ui:bottom-panel-height' | 'ui:sidebar-widt
 
 const saveSetting = (key: SettingKey, value: number | string) => void window.api.settings.set(key as 'ui:sidebar-width', value as number);
 
+/** Primer refresco tras una transferencia: rápido, para que se note al momento. */
+const REFRESH_FIRST_DELAY = 400;
 /**
- * Refresca los paneles cuya carpeta acaba de recibir ficheros. Se agrupa para
- * no relistar una carpeta por cada fichero de una subida grande.
+ * Durante una tanda larga (muchos ficheros seguidos), no refrescar más de una
+ * vez cada REFRESH_MIN_INTERVAL: relistar la carpeta en cada fichero sobrecarga
+ * el panel sin necesidad. 7 s es un punto medio dentro de los 5-10 s pedidos.
+ */
+const REFRESH_MIN_INTERVAL = 7000;
+
+/**
+ * Refresca los paneles cuya carpeta acaba de recibir ficheros: el local en una
+ * bajada, el remoto en una subida. Se agrupa para no relistar una carpeta por
+ * cada fichero de una transferencia grande.
  */
 function useRefreshAfterTransfers() {
   useEffect(() => {
     const pending = new Set<string>();
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let lastFlushAt = 0;
     const local = localPaths(window.api.local.separator);
 
     const flush = () => {
       timer = null;
+      lastFlushAt = Date.now();
       const { panes, refresh } = usePanesStore.getState();
       for (const key of pending) {
-        const [kind, dir] = [key.slice(0, key.indexOf('|')), key.slice(key.indexOf('|') + 1)];
-        const paneKey = kind === 'local' ? 'local' : remotePaneKey(kind);
+        const sep = key.indexOf('|');
+        const paneKey = key.slice(0, sep) as PaneKey;
+        const dir = key.slice(sep + 1);
         if (panes[paneKey]?.path === dir) void refresh(paneKey);
       }
       pending.clear();
     };
 
+    const schedule = () => {
+      if (timer) return;
+      const elapsed = Date.now() - lastFlushAt;
+      const delay = elapsed > REFRESH_MIN_INTERVAL ? REFRESH_FIRST_DELAY : REFRESH_MIN_INTERVAL - elapsed;
+      timer = setTimeout(flush, delay);
+    };
+
     return window.api.on(IPC_EVENTS.QUEUE_UPDATED, ({ jobs }) => {
       for (const job of jobs as JobSnapshot[]) {
         if (job.status !== 'done') continue;
-        if (job.direction === 'download') pending.add(`local|${local.parent(job.localPath) ?? job.localPath}`);
-        else pending.add(`${job.sessionId}|${remotePaths.parent(job.remotePath) ?? '/'}`);
+        // El panel local de una bajada es el de esa pestaña (local:<sessionId>),
+        // no el panel local sin sesión: cada pestaña tiene su propia carpeta local.
+        if (job.direction === 'download') pending.add(`${localPaneKey(job.sessionId)}|${local.parent(job.localPath) ?? job.localPath}`);
+        else pending.add(`${remotePaneKey(job.sessionId)}|${remotePaths.parent(job.remotePath) ?? '/'}`);
       }
-      if (pending.size > 0 && !timer) timer = setTimeout(flush, 400);
+      if (pending.size > 0) schedule();
     });
   }, []);
 }

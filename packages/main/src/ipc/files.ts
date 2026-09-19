@@ -6,6 +6,7 @@ import {
   editorSaveInputSchema,
   localPathInputSchema,
   openExternalInputSchema,
+  prepareDragInputSchema,
   uploadExternalInputSchema,
   remotePathInputSchema,
   watchIdInputSchema,
@@ -25,6 +26,7 @@ export function registerFileHandlers(editor: EditorManager, watches: WatchManage
     await external.upload(id, force);
     return null;
   });
+  handle(IPC_CHANNELS.FILES_PREPARE_DRAG, prepareDragInputSchema, ({ sessionId, items }) => external.prepareForDrag(sessionId, items));
 
   handle(IPC_CHANNELS.WATCH_LIST, null, () => watches.list());
   handle(IPC_CHANNELS.WATCH_START, watchStartInputSchema, ({ sessionId, localDir, remoteDir }) => watches.start(sessionId, localDir, remoteDir));

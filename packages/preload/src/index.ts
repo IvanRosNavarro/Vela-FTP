@@ -94,6 +94,8 @@ const api: PreloadApi = {
     open: (path) => invoke(C.LOCAL_OPEN, { path }),
     reveal: (path) => invoke(C.LOCAL_REVEAL, { path }),
     pathForFile: (file) => webUtils.getPathForFile(file),
+    startDrag: (paths) => invoke(C.LOCAL_START_DRAG, { paths }),
+    copyInto: (paths, targetDir) => invoke(C.LOCAL_COPY_INTO, { paths, targetDir }),
     separator: process.platform === 'win32' ? '\\' : '/',
   },
 
@@ -118,6 +120,7 @@ const api: PreloadApi = {
     diff: (sessionId, remotePath, localPath) => invoke(C.FILES_DIFF, { sessionId, remotePath, localPath }),
     openExternal: (sessionId, path, mode) => invoke(C.FILES_OPEN_EXTERNAL, { sessionId, path, mode }),
     uploadExternal: (id, force) => invoke(C.FILES_UPLOAD_EXTERNAL, { id, force }),
+    prepareDrag: (sessionId, items) => invoke(C.FILES_PREPARE_DRAG, { sessionId, items }),
   },
 
   editor: {
