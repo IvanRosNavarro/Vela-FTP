@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react';
 import {
   ArrowLeft,
+  ArrowRight,
   ArrowUp,
   Check,
   Copy,
@@ -30,6 +31,7 @@ import { toast } from 'vela-kit/ui';
 import type { CompareStatus } from '../../lib/compare';
 import { formatSize } from '../../lib/format';
 import { COLUMNS, availableColumns, cellText, gridTemplate, minGridWidth, visibleColumns, type FileColumnId } from '../../lib/columns';
+import { EXPORT_MODIFIER_LABEL, wantsExport } from '../../lib/gestures';
 import { call, errorText } from '../../lib/ipc';
 import { isValidName, localPaths, remotePaths, type PathOps } from '../../lib/paths';
 import { downloadEntries, uploadDroppedFiles, uploadEntries } from '../../lib/transfers';
@@ -94,6 +96,7 @@ interface RowProps {
   isRemote: boolean;
   dropTarget: string | null;
   onRowMouseDown: (e: MouseEvent, entry: RemoteEntry, index: number) => void;
+  onRowMouseUp: (e: MouseEvent, entry: RemoteEntry) => void;
   onRowDoubleClick: (entry: RemoteEntry) => void;
   onRowContextMenu: (e: MouseEvent, entry: RemoteEntry) => void;
   onRowDragStart: (e: DragEvent, entry: RemoteEntry) => void;
@@ -124,6 +127,7 @@ function Row({ index, style, ariaAttributes, entries, columns, grid, compare, se
       } ${dropTarget === entry.path ? 'outline outline-1 outline-[var(--vela-accent)]' : ''}`}
       draggable
       onMouseDown={(e) => handlers.onRowMouseDown(e, entry, index)}
+      onMouseUp={(e) => handlers.onRowMouseUp(e, entry)}
       onDoubleClick={() => handlers.onRowDoubleClick(entry)}
       onContextMenu={(e) => handlers.onRowContextMenu(e, entry)}
       onDragStart={(e) => handlers.onRowDragStart(e, entry)}
@@ -164,6 +168,8 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
   const searchRef = useRef<{ buffer: string; at: number; anchor: number }>({ buffer: '', at: 0, anchor: -1 });
   /** Remotos ya bajados a un temporal para poder arrastrarlos fuera de la ventana. */
   const dragPrimed = useRef<Map<string, { path: string; name: string }>>(new Map());
+  /** Fila cuyo Ctrl+clic está a la espera de saber si era selección o arrastre. */
+  const pendingToggle = useRef<string | null>(null);
   const [roots, setRoots] = useState<LocalRoot[]>([]);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [dragOverPane, setDragOverPane] = useState(false);
@@ -293,11 +299,20 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
       const [a, b] = from < index ? [from, index] : [index, from];
       select(entries.slice(Math.max(a, 0), b + 1).map((x) => x.path), pane.anchor);
     } else if (e.ctrlKey || e.metaKey) {
-      select(selectedSet.has(entry.path) ? pane.selected.filter((p) => p !== entry.path) : [...pane.selected, entry.path], entry.path);
+      // La selección se aplica al soltar: si esto acaba siendo un arrastre para
+      // sacar el fichero, no queremos haberlo quitado ya de la selección.
+      pendingToggle.current = entry.path;
     } else if (!(e.button === 0 && selectedSet.has(entry.path) && pane.selected.length > 1)) {
       // Con varios seleccionados, un clic sin soltar puede ser el inicio de un arrastre.
       select([entry.path], entry.path);
     }
+  };
+
+  /** Ctrl+clic sin arrastre: ahora sí, marcar o desmarcar la fila. */
+  const onRowMouseUp = (_e: MouseEvent, entry: RemoteEntry) => {
+    if (pendingToggle.current !== entry.path) return;
+    pendingToggle.current = null;
+    select(selectedSet.has(entry.path) ? pane.selected.filter((p) => p !== entry.path) : [...pane.selected, entry.path], entry.path);
   };
 
   const mkdir = async () => {
@@ -467,15 +482,17 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
 
   // ── Arrastrar y soltar ────────────────────────────────────────────────
   /**
-   * Alt+arrastrar saca los ficheros de Vela FTP; el arrastre normal mueve
-   * entre paneles. Hay que elegir aquí porque en Windows `startDrag` deja a la
-   * propia ventana fuera como destino del arrastre (electron#7118): en el
-   * mismo gesto no se puede tener las dos cosas.
+   * Ctrl+arrastrar (Option en macOS) saca los ficheros de Vela FTP; el
+   * arrastre normal mueve entre paneles. Hay que elegir aquí porque
+   * `startDrag` cancela el arrastre HTML5 y deja a la propia ventana fuera
+   * como destino (electron#7118).
    */
   const onRowDragStart = (e: DragEvent, entry: RemoteEntry) => {
+    // Si el arrastre empieza, el Ctrl+clic era para sacar, no para seleccionar.
+    pendingToggle.current = null;
     const paths = selectedSet.has(entry.path) ? pane.selected : [entry.path];
     if (!selectedSet.has(entry.path)) select([entry.path], entry.path);
-    if (e.altKey) {
+    if (wantsExport(e)) {
       e.preventDefault();
       // El IPC sale en este mismo tick: `startDrag` solo vale mientras dura el gesto.
       if (!isRemote) void call(window.api.local.startDrag(paths)).catch((err) => toast(errorText(err), 'error'));
@@ -489,7 +506,7 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
 
   /**
    * Un remoto no existe en disco y el arrastre nativo lo exige escrito, así que
-   * va en dos pasos: este Alt+arrastre lo baja a un temporal y el siguiente ya
+   * va en dos pasos: este arrastre lo baja a un temporal y el siguiente ya
    * lo saca.
    */
   const dragRemoteOut = (entry: RemoteEntry, paths: string[]) => {
@@ -579,7 +596,12 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
       }
     });
     if (ready > 0) {
-      toast(ready === 1 ? 'Listo: vuelve a arrastrarlo con Alt para sacarlo' : `${ready} ficheros listos: vuelve a arrastrarlos con Alt para sacarlos`, 'info');
+      toast(
+        ready === 1
+          ? `Listo: vuelve a arrastrarlo con ${EXPORT_MODIFIER_LABEL} para sacarlo`
+          : `${ready} ficheros listos: vuelve a arrastrarlos con ${EXPORT_MODIFIER_LABEL} para sacarlos`,
+        'info',
+      );
     }
   };
 
@@ -710,6 +732,9 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
         <button className="vf-icon-btn" title="Atrás" disabled={pane.history.length === 0} onClick={() => void store().back(paneKey)}>
           <ArrowLeft size={14} />
         </button>
+        <button className="vf-icon-btn" title="Adelante" disabled={pane.future.length === 0} onClick={() => void store().forward(paneKey)}>
+          <ArrowRight size={14} />
+        </button>
         <button className="vf-icon-btn" title="Subir un nivel (Retroceso)" disabled={!ops.parent(pane.path)} onClick={up}>
           <ArrowUp size={14} />
         </button>
@@ -807,14 +832,15 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
               isRemote,
               dropTarget,
               onRowMouseDown,
+              onRowMouseUp,
               onRowDoubleClick: open,
               onRowContextMenu,
               onRowDragStart,
               onRowDragOver,
               onRowDrop,
               dragOutHint: isRemote
-                ? 'Alt+arrastrar para sacarlo de Vela FTP (baja una copia la primera vez)'
-                : 'Alt+arrastrar para sacarlo de Vela FTP',
+                ? `${EXPORT_MODIFIER_LABEL}+arrastrar para sacarlo de Vela FTP (baja una copia la primera vez)`
+                : `${EXPORT_MODIFIER_LABEL}+arrastrar para sacarlo de Vela FTP`,
             }}
             style={{ height: '100%' }}
           />
@@ -824,13 +850,17 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
       </div>
 
       <div className="flex justify-between border-t border-[var(--vela-border)] px-2 py-0.5 text-[10px] text-[var(--vela-fg-muted)]">
-        <span>
+        <span className="shrink-0">
           {entries.filter((x) => x.type === 'dir').length} carpetas, {entries.filter((x) => x.type !== 'dir').length} ficheros
         </span>
         {pane.selected.length > 0 && (
-          <span>
-            {pane.selected.length} seleccionados · {formatSize(selectedEntries().reduce((n, x) => n + (x.type === 'dir' ? 0 : x.size), 0))}
-          </span>
+          <>
+            {/* El gesto para sacar ficheros no se descubre solo: se recuerda al seleccionar. */}
+            <span className="truncate px-2 opacity-80">{EXPORT_MODIFIER_LABEL}+arrastrar para sacarlos de Vela FTP</span>
+            <span className="shrink-0">
+              {pane.selected.length} seleccionados · {formatSize(selectedEntries().reduce((n, x) => n + (x.type === 'dir' ? 0 : x.size), 0))}
+            </span>
+          </>
         )}
       </div>
     </section>

@@ -1,7 +1,7 @@
 import { cp, mkdir, readdir, lstat, rename, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { app as electronApp, BrowserWindow, dialog, nativeImage, shell } from 'electron';
+import { BrowserWindow, dialog, nativeImage, shell } from 'electron';
 import {
   IPC_CHANNELS,
   IPC_EVENTS,
@@ -104,20 +104,23 @@ async function localRoots(): Promise<LocalRoot[]> {
   return [{ path: os.homedir(), label: 'Inicio' }, ...found.filter((r): r is LocalRoot => r !== null)];
 }
 
-// startDrag exige un icono no vacío; app.getFileIcon debería bastar siempre, pero
-// por si el SO no da uno hace falta un respaldo (un píxel transparente).
-const FALLBACK_DRAG_ICON = nativeImage.createFromDataURL(
-  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-);
-
-async function dragIcon(path: string) {
-  try {
-    const icon = await electronApp.getFileIcon(path, { size: 'normal' });
-    return icon.isEmpty() ? FALLBACK_DRAG_ICON : icon;
-  } catch {
-    return FALLBACK_DRAG_ICON;
+/**
+ * startDrag exige un icono no vacío, y pedirlo al SO (`app.getFileIcon`) es
+ * asíncrono: para cuando contesta, el gesto del ratón ya se ha perdido y el
+ * arrastre no arranca. Se crea uno propio una sola vez, sin E/S.
+ */
+const DRAG_ICON = (() => {
+  const size = 32;
+  const pixels = Buffer.alloc(size * size * 4);
+  for (let i = 0; i < pixels.length; i += 4) {
+    // BGRA: el azul de Vela, casi opaco.
+    pixels[i] = 0xd8;
+    pixels[i + 1] = 0x7a;
+    pixels[i + 2] = 0x4a;
+    pixels[i + 3] = 0xcc;
   }
-}
+  return nativeImage.createFromBitmap(pixels, { width: size, height: size });
+})();
 
 export function registerAppHandlers(deps: AppIpcDeps): void {
   const { sites, knownHosts, secrets, sessions, transfer, queue, history } = deps;
@@ -232,9 +235,11 @@ export function registerAppHandlers(deps: AppIpcDeps): void {
     shell.showItemInFolder(p);
     return null;
   });
-  handle(IPC_CHANNELS.LOCAL_START_DRAG, startDragInputSchema, async ({ paths }, event) => {
+  handle(IPC_CHANNELS.LOCAL_START_DRAG, startDragInputSchema, ({ paths }, event) => {
+    // Nada de await antes de esto: el arrastre solo se puede ceder al SO
+    // mientras el gesto del ratón sigue vivo.
     // `files` manda sobre `file` cuando hay más de uno, pero el tipo lo exige igualmente.
-    event.sender.startDrag({ file: paths[0]!, files: paths, icon: await dragIcon(paths[0]!) });
+    event.sender.startDrag({ file: paths[0]!, files: paths, icon: DRAG_ICON });
     return null;
   });
   handle(IPC_CHANNELS.LOCAL_COPY_INTO, localCopyIntoInputSchema, async ({ paths, targetDir }) => {

@@ -4,6 +4,7 @@ import { List, type RowComponentProps } from 'react-window';
 import type { JobSnapshot, ProtocolLogLine } from '@vela-ftp/shared';
 import { toast } from 'vela-kit/ui';
 import { formatEta, formatSize, formatSpeed } from '../../lib/format';
+import { EXPORT_MODIFIER_LABEL } from '../../lib/gestures';
 import { call, describeError, errorText } from '../../lib/ipc';
 import { ACTIVE_STATUSES, FAILED_STATUSES, useQueueStore } from '../../stores/queueStore';
 import { useSessionsStore } from '../../stores/sessionsStore';
@@ -299,7 +300,9 @@ export function BottomPanel({ height }: { height: number }) {
           )
         ) : current.length === 0 ? (
           <div className="flex h-full items-center justify-center text-xs text-[var(--vela-fg-muted)]">
-            {tab === 'queue' ? 'Arrastra ficheros entre los paneles o haz doble clic para transferir' : 'Nada por aquí'}
+            {tab === 'queue'
+              ? `Arrastra ficheros entre los paneles o haz doble clic para transferir. Con ${EXPORT_MODIFIER_LABEL}+arrastrar los sacas a otro programa.`
+              : 'Nada por aquí'}
           </div>
         ) : (
           <List

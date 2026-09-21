@@ -18,6 +18,8 @@ export interface PaneState {
   showHidden: boolean;
   /** Rutas visitadas, para Atrás. */
   history: string[];
+  /** Rutas de las que se ha vuelto, para Adelante. */
+  future: string[];
 }
 
 /**
@@ -59,6 +61,7 @@ const initialPane = (path: string): PaneState => ({
   sort: { key: 'name', dir: 'asc' },
   showHidden: true,
   history: [],
+  future: [],
 });
 
 interface PanesState {
@@ -67,6 +70,7 @@ interface PanesState {
   navigate(key: PaneKey, path: string, options?: { pushHistory?: boolean; keepSelection?: boolean }): Promise<boolean>;
   refresh(key: PaneKey): Promise<void>;
   back(key: PaneKey): Promise<void>;
+  forward(key: PaneKey): Promise<void>;
   setSelection(key: PaneKey, selected: string[], anchor: string | null): void;
   setSort(key: PaneKey, sortKey: SortKey): void;
   toggleHidden(key: PaneKey): void;
@@ -99,10 +103,12 @@ export const usePanesStore = create<PanesState>((set, get) => {
         const entries = await fetchEntries(key, path);
         if (requestIds[key] !== requestId) return false;
         const current = get().panes[key];
-        const history =
-          options.pushHistory && current && current.path !== path ? [...current.history.slice(-49), current.path] : (current?.history ?? []);
+        // Navegar a un sitio nuevo abandona el camino de vuelta, como en un navegador.
+        const movingAway = !!options.pushHistory && !!current && current.path !== path;
+        const history = movingAway ? [...current!.history.slice(-49), current!.path] : (current?.history ?? []);
+        const future = movingAway ? [] : (current?.future ?? []);
         const keep = options.keepSelection ? current?.selected.filter((p) => entries.some((e) => e.path === p)) ?? [] : [];
-        patch(key, { path, entries, loading: false, error: null, selected: keep, anchor: keep.length ? current?.anchor ?? null : null, history });
+        patch(key, { path, entries, loading: false, error: null, selected: keep, anchor: keep.length ? current?.anchor ?? null : null, history, future });
         return true;
       } catch (err) {
         if (requestIds[key] !== requestId) return false;
@@ -118,8 +124,15 @@ export const usePanesStore = create<PanesState>((set, get) => {
       const pane = get().panes[key];
       const previous = pane?.history.at(-1);
       if (!pane || previous === undefined) return;
-      patch(key, { history: pane.history.slice(0, -1) });
+      patch(key, { history: pane.history.slice(0, -1), future: [pane.path, ...pane.future].slice(0, 50) });
       await get().navigate(key, previous);
+    },
+    async forward(key) {
+      const pane = get().panes[key];
+      const next = pane?.future[0];
+      if (!pane || next === undefined) return;
+      patch(key, { history: [...pane.history.slice(-49), pane.path], future: pane.future.slice(1) });
+      await get().navigate(key, next);
     },
     setSelection: (key, selected, anchor) => patch(key, { selected, anchor }),
     setSort(key, sortKey) {
