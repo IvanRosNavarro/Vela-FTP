@@ -15,14 +15,18 @@
 - Sincronización: el historial de rutas y la cola de transferencias no viajan
   (son de cada equipo). Tampoco hay resolución de conflictos manual: gana la
   modificación más reciente.
-- Sacar ficheros de Vela FTP al escritorio pide Alt+arrastrar. En Windows,
-  `webContents.startDrag` deja a la propia ventana fuera como destino del
-  arrastre (electron#7118), así que el arrastre normal se reserva para mover
-  entre paneles y el nativo necesita un gesto propio.
-- Arrastrar un remoto fuera va en dos pasos: el primer Alt+arrastre lo baja a
-  un temporal y el segundo ya lo saca. El arrastre nativo exige el fichero en
+- Sacar ficheros de Vela FTP al escritorio pide Ctrl+arrastrar (Option en
+  macOS). `startDrag` cancela el arrastre HTML5 y deja a la propia ventana
+  fuera como destino (electron#7118), así que el arrastre normal se reserva
+  para mover entre paneles. El modificador no puede ser cualquiera: al soltar,
+  el Explorador interpreta Alt como «crear acceso directo» y rechaza el drop
+  porque solo ofrecemos copia; Ctrl pide copia y lo acepta.
+- Arrastrar un remoto fuera va en dos pasos: el primer arrastre lo baja a un
+  temporal y el segundo ya lo saca. El arrastre nativo exige el fichero en
   disco y Electron no expone la entrega diferida de Windows. Solo ficheros
   sueltos, no carpetas.
+- Mientras dura un arrastre hacia fuera, el proceso main se queda dentro del
+  bucle de arrastre de Windows y no atiende IPC. Solo dura el gesto.
 - Mover ficheros arrastrando dentro del mismo panel.
 - Vigilancia de carpetas: no propaga borrados ni sobrevive a un reinicio.
 - Los paneles no se refrescan solos con cambios del disco local ni al crear
