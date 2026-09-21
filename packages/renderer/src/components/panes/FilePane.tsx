@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react';
 import {
   ArrowLeft,
+  ArrowRight,
   ArrowUp,
   Check,
   Copy,
@@ -730,6 +731,9 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
       <div className="flex items-center gap-1 border-b border-[var(--vela-border)] px-1.5 py-1">
         <button className="vf-icon-btn" title="Atrás" disabled={pane.history.length === 0} onClick={() => void store().back(paneKey)}>
           <ArrowLeft size={14} />
+        </button>
+        <button className="vf-icon-btn" title="Adelante" disabled={pane.future.length === 0} onClick={() => void store().forward(paneKey)}>
+          <ArrowRight size={14} />
         </button>
         <button className="vf-icon-btn" title="Subir un nivel (Retroceso)" disabled={!ops.parent(pane.path)} onClick={up}>
           <ArrowUp size={14} />
