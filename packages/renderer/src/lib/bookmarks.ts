@@ -1,14 +1,14 @@
 import { toast } from 'vela-kit/ui';
 import { call, errorText } from './ipc';
 import { promptDialog } from '../stores/dialogStore';
-import { usePanesStore } from '../stores/panesStore';
+import { localPaneKey, usePanesStore } from '../stores/panesStore';
 import { useSitesStore } from '../stores/sitesStore';
 
 /**
  * Marca una carpeta remota. La carpeta local abierta en ese momento queda
  * emparejada: al abrir el marcador, el panel local vuelve a ella.
  */
-export async function addBookmarkFor(siteId: string, remotePath: string): Promise<void> {
+export async function addBookmarkFor(siteId: string, remotePath: string, sessionId: string): Promise<void> {
   const existing = useSitesStore.getState().bookmarks.find((b) => b.siteId === siteId && b.remotePath === remotePath);
   if (existing) {
     toast(`Ya está en marcadores como «${existing.name}»`, 'info');
@@ -23,7 +23,7 @@ export async function addBookmarkFor(siteId: string, remotePath: string): Promis
     validate: (v) => (v.trim() ? null : 'Escribe un nombre'),
   });
   if (!name) return;
-  const localPath = usePanesStore.getState().panes.local?.path ?? null;
+  const localPath = usePanesStore.getState().panes[localPaneKey(sessionId)]?.path ?? null;
   try {
     await call(window.api.bookmarks.create({ siteId, name: name.trim(), remotePath, localPath }));
     toast(`Marcador «${name.trim()}» añadido`, 'success');

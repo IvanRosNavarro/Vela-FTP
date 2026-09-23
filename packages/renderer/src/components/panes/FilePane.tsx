@@ -758,7 +758,7 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
           <button
             className={`vf-icon-btn ${isBookmarked ? 'text-[var(--vela-accent)]' : ''}`}
             title={isBookmarked ? 'Carpeta en marcadores' : 'Añadir marcador (Ctrl+D)'}
-            onClick={() => void addBookmarkFor(paneSiteId, pane.path)}
+            onClick={() => void addBookmarkFor(paneSiteId, pane.path, sessionId)}
           >
             <Star size={14} fill={isBookmarked ? 'currentColor' : 'none'} />
           </button>

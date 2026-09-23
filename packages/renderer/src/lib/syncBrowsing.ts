@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { toast } from 'vela-kit/ui';
 import { mirrorPath } from './compare';
 import { localPaths, remotePaths } from './paths';
-import { remotePaneKey, usePanesStore } from '../stores/panesStore';
+import { localPaneKey, remotePaneKey, usePanesStore } from '../stores/panesStore';
 import { useSessionsStore } from '../stores/sessionsStore';
 import { useUiStore } from '../stores/uiStore';
 
@@ -16,7 +16,8 @@ export function toggleSyncBrowsing(): void {
   }
   const { activeId } = useSessionsStore.getState();
   const { panes } = usePanesStore.getState();
-  const local = panes.local;
+  // Cada pestaña lleva su propia carpeta local: hay que emparejar las de la sesión activa.
+  const local = activeId ? panes[localPaneKey(activeId)] : undefined;
   const remote = activeId ? panes[remotePaneKey(activeId)] : undefined;
   if (!activeId || !local || !remote) {
     toast('Conéctate a un sitio para sincronizar la navegación', 'info');
@@ -38,8 +39,9 @@ export function useSyncBrowsing(): void {
     return usePanesStore.subscribe((state, previous) => {
       const sync = useUiStore.getState().syncBrowsing;
       if (!sync) return;
+      const localKey = localPaneKey(sync.sessionId);
       const remoteKey = remotePaneKey(sync.sessionId);
-      const localPane = state.panes.local;
+      const localPane = state.panes[localKey];
       const remotePane = state.panes[remoteKey];
       if (!localPane || !remotePane) {
         useUiStore.getState().setSyncBrowsing(null);
@@ -47,7 +49,7 @@ export function useSyncBrowsing(): void {
       }
 
       const follow = (kind: 'local' | 'remote') => {
-        const [pane, other, otherKey] = kind === 'local' ? [localPane, remotePane, remoteKey] : [remotePane, localPane, 'local' as const];
+        const [pane, other, otherKey] = kind === 'local' ? [localPane, remotePane, remoteKey] : [remotePane, localPane, localKey];
         const target =
           kind === 'local'
             ? mirrorPath(pane.path, sync.localBase, sync.remoteBase, local, remotePaths)
@@ -66,7 +68,7 @@ export function useSyncBrowsing(): void {
           });
       };
 
-      if (localPane.path !== previous.panes.local?.path) follow('local');
+      if (localPane.path !== previous.panes[localKey]?.path) follow('local');
       else if (remotePane.path !== previous.panes[remoteKey]?.path) follow('remote');
     });
   }, []);
