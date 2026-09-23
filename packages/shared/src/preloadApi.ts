@@ -45,6 +45,8 @@ export interface WindowApi {
   isMaximized(): Promise<AppResponse<boolean>>;
   /** Solo tiene efecto en Windows. */
   updateTitleBarOverlay(colors: TitleBarOverlayInput): Promise<AppResponse<null>>;
+  /** Si el SO difumina de verdad detrás de la ventana (acrylic o vibrancy). */
+  backgroundMaterial(): Promise<AppResponse<{ supported: boolean }>>;
 }
 
 export interface SitesApi {

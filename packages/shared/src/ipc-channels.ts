@@ -16,6 +16,7 @@ export const IPC_CHANNELS = {
   WINDOW_CLOSE: 'window:close',
   WINDOW_IS_MAXIMIZED: 'window:is-maximized',
   WINDOW_UPDATE_TITLE_BAR_OVERLAY: 'window:update-title-bar-overlay',
+  WINDOW_BACKGROUND_MATERIAL: 'window:background-material',
 
   SITES_LIST: 'sites:list',
   SITES_CREATE: 'sites:create',

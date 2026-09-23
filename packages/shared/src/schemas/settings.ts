@@ -37,6 +37,12 @@ export const SETTING_SCHEMAS = {
   'app:welcomed': z.boolean(),
   /** Buscar actualizaciones al arrancar y cada pocas horas. */
   'updates:auto-check': z.boolean(),
+  /** Efecto de cristal: fondos translúcidos con desenfoque sobre el material del SO. */
+  'ui:glassmorphism': z.boolean(),
+  /** Fuerza del desenfoque, de 0 a 100. */
+  'ui:glassmorphism-intensity': z.number().int().min(0).max(100),
+  /** Opacidad del cristal: 0 = casi transparente, 100 = casi sólido. */
+  'ui:glassmorphism-opacity': z.number().int().min(0).max(100),
 } as const;
 
 export type SettingKey = keyof typeof SETTING_SCHEMAS;
@@ -58,6 +64,9 @@ export const SETTING_DEFAULTS: { [K in SettingKey]: SettingValue<K> } = {
   'files:external-save': 'upload',
   'app:welcomed': false,
   'updates:auto-check': true,
+  'ui:glassmorphism': false,
+  'ui:glassmorphism-intensity': 60,
+  'ui:glassmorphism-opacity': 60,
 };
 
 const settingKeySchema = z.enum(Object.keys(SETTING_SCHEMAS) as [SettingKey, ...SettingKey[]]);

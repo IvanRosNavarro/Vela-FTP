@@ -20,6 +20,7 @@ const api: PreloadApi = {
     close: () => invoke(C.WINDOW_CLOSE),
     isMaximized: () => invoke(C.WINDOW_IS_MAXIMIZED),
     updateTitleBarOverlay: (colors) => invoke(C.WINDOW_UPDATE_TITLE_BAR_OVERLAY, colors),
+    backgroundMaterial: () => invoke(C.WINDOW_BACKGROUND_MATERIAL),
   },
 
   sites: {

@@ -19,6 +19,14 @@ html {
 }
 
 @layer components {
+  /* Superficie de cristal. vela-kit fija --sidebar-background-opacity y
+     --sidebar-backdrop-filter; sin el efecto valen 1 y none, así que queda el
+     color sólido del tema. Cada superficie elige su color con --vf-glass. */
+  .vf-glass {
+    background: color-mix(in srgb, var(--vf-glass, var(--vela-bg)) calc(var(--sidebar-background-opacity, 1) * 100%), transparent);
+    backdrop-filter: var(--sidebar-backdrop-filter, none);
+    -webkit-backdrop-filter: var(--sidebar-backdrop-filter, none);
+  }
   .vf-btn {
     @apply inline-flex items-center gap-1.5 rounded-md border border-[var(--vela-border)] bg-[var(--vela-bg-elevated)] px-3 py-1.5 text-xs text-[var(--vela-fg)] transition-colors hover:border-[var(--vela-accent)] disabled:cursor-not-allowed disabled:opacity-50;
   }

@@ -2,6 +2,7 @@ import { BrowserWindow, ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { IPC_CHANNELS, titleBarOverlayInputSchema } from '@vela-ftp/shared';
 import { fail, ok, validatePayload, type IpcResponse } from 'vela-kit/ipc';
 import { isTrustedSender } from './guard';
+import { backgroundMaterialSupported } from '../window/mainWindow';
 
 type WindowAction = (win: BrowserWindow) => void;
 
@@ -33,6 +34,11 @@ export function registerWindowHandlers(): void {
     if (!isTrustedSender(event, IPC_CHANNELS.WINDOW_IS_MAXIMIZED)) return fail('UNTRUSTED_FRAME');
     const win = ownWindow(event);
     return win ? ok(win.isMaximized()) : fail('NOT_FOUND');
+  });
+
+  ipcMain.handle(IPC_CHANNELS.WINDOW_BACKGROUND_MATERIAL, (event): IpcResponse<{ supported: boolean }> => {
+    if (!isTrustedSender(event, IPC_CHANNELS.WINDOW_BACKGROUND_MATERIAL)) return fail('UNTRUSTED_FRAME');
+    return ok({ supported: backgroundMaterialSupported.value });
   });
 
   ipcMain.handle(IPC_CHANNELS.WINDOW_UPDATE_TITLE_BAR_OVERLAY, (event, raw): IpcResponse<null> => {

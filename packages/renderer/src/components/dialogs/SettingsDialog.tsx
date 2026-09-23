@@ -91,6 +91,79 @@ function GeneralSection() {
   );
 }
 
+/** Los tres ajustes del cristal viven juntos: se guardan y se aplican a la vez. */
+function GlassSection() {
+  const [supported, setSupported] = useState(false);
+  const [glass, setGlass] = useState({ enabled: false, intensity: 60, opacity: 60 });
+  useEffect(() => {
+    void call(window.api.window.backgroundMaterial()).then((r) => setSupported(r.supported)).catch(() => undefined);
+    void Promise.all([
+      call(window.api.settings.get('ui:glassmorphism')),
+      call(window.api.settings.get('ui:glassmorphism-intensity')),
+      call(window.api.settings.get('ui:glassmorphism-opacity')),
+    ])
+      .then(([enabled, intensity, opacity]) => setGlass({ enabled, intensity, opacity }))
+      .catch(() => undefined);
+  }, []);
+
+  // Se ve al momento; si el guardado falla, se deshace para no mentir.
+  const change = async (patch: Partial<typeof glass>) => {
+    const previous = glass;
+    const next = { ...glass, ...patch };
+    setGlass(next);
+    themeManager.applyGlassmorphism(next.enabled, next.intensity, next.opacity);
+    const key = ([['enabled', 'ui:glassmorphism'], ['intensity', 'ui:glassmorphism-intensity'], ['opacity', 'ui:glassmorphism-opacity']] as const)
+      .find(([field]) => field in patch);
+    if (!key) return;
+    try {
+      await call(window.api.settings.set(key[1], next[key[0]]));
+    } catch (err) {
+      setGlass(previous);
+      themeManager.applyGlassmorphism(previous.enabled, previous.intensity, previous.opacity);
+      toast(`No se pudo guardar: ${errorText(err)}`, 'error');
+    }
+  };
+
+  const slider = (label: string, field: 'intensity' | 'opacity', hint: string) => (
+    <label className="vf-label">
+      <span className="flex items-center justify-between">
+        {label} <span className="tabular-nums">{glass[field]}</span>
+      </span>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={5}
+        value={glass[field]}
+        className="w-full accent-[var(--vela-accent)]"
+        onChange={(e) => void change({ [field]: Number(e.target.value) })}
+      />
+      <span className="text-[11px] text-[var(--vela-fg-muted)]">{hint}</span>
+    </label>
+  );
+
+  return (
+    <section className="flex flex-col gap-2 border-t border-[var(--vela-border)] pt-4">
+      <h3 className="vf-panel-title">Efecto de cristal</h3>
+      <label className="flex items-center gap-2 text-xs">
+        <input type="checkbox" checked={glass.enabled} onChange={(e) => void change({ enabled: e.target.checked })} />
+        Fondos translúcidos con desenfoque
+      </label>
+      {glass.enabled && (
+        <div className="flex flex-col gap-3 pt-1">
+          {slider('Desenfoque', 'intensity', 'Cuánto se difumina lo que hay detrás.')}
+          {slider('Opacidad', 'opacity', 'Menos opacidad, más se transparenta el fondo.')}
+        </div>
+      )}
+      <p className="text-[11px] text-[var(--vela-fg-muted)]">
+        {supported
+          ? 'Tu sistema difumina de verdad lo que hay detrás de la ventana.'
+          : 'Tu sistema no difumina detrás de la ventana (hace falta Windows 11 22H2 o macOS); el cristal se queda en el desenfoque de la propia interfaz.'}
+      </p>
+    </section>
+  );
+}
+
 function AppearanceSection() {
   const [themeId, setThemeId] = useState(() => themeManager.getCurrentThemeId());
   const change = async (next: string) => {
@@ -107,7 +180,8 @@ function AppearanceSection() {
   };
   const options = [{ id: 'system', name: 'Sistema (claro u oscuro según el SO)' }, ...BUILTIN_THEMES.map((t) => ({ id: t.id, name: t.name }))];
   return (
-    <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Tema">
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Tema">
       {options.map((t) => {
         const theme = BUILTIN_THEMES.find((b) => b.id === t.id);
         return (
@@ -130,6 +204,8 @@ function AppearanceSection() {
           </button>
         );
       })}
+      </div>
+      <GlassSection />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { ArrowDown, ArrowUp, CircleAlert, CircleCheck, CircleX, Clock, Loader2, Radar, RotateCcw, Square, Trash2, X } from 'lucide-react';
 import { List, type RowComponentProps } from 'react-window';
 import type { JobSnapshot, ProtocolLogLine } from '@vela-ftp/shared';
@@ -240,7 +240,10 @@ export function BottomPanel({ height }: { height: number }) {
   );
 
   return (
-    <div style={{ height }} className="flex shrink-0 flex-col border-t border-[var(--vela-border)] bg-[var(--vela-bg-elevated)]">
+    <div
+      style={{ height, '--vf-glass': 'var(--vela-bg-elevated)' } as CSSProperties}
+      className="vf-glass flex shrink-0 flex-col border-t border-[var(--vela-border)]"
+    >
       <div className="flex items-center justify-between pr-2" role="tablist">
         <div className="flex">
           {tabButton('queue', 'Cola', lists.queue.length)}

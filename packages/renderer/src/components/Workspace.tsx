@@ -100,7 +100,7 @@ export function Workspace() {
   );
 
   return (
-    <main id="vela-content" className="flex min-h-0 min-w-0 flex-1 flex-col">
+    <main id="vela-content" className="vf-glass flex min-h-0 min-w-0 flex-1 flex-col">
       {sessions.length > 0 && (
         <div className="flex items-end gap-0.5 border-b border-[var(--vela-border)] px-1 pt-1">
           <div className="flex min-w-0 flex-1 items-end gap-0.5" role="tablist" aria-label="Sesiones">
