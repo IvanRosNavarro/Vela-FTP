@@ -1,4 +1,4 @@
-import { useState, type DragEvent, type ReactNode } from 'react';
+import { useState, type CSSProperties, type DragEvent, type ReactNode } from 'react';
 import {
   Bookmark as BookmarkIcon,
   ChevronDown,
@@ -318,8 +318,8 @@ export function SitesSidebar({ width, collapsed, onToggleCollapsed }: SitesSideb
     return (
       <aside
         id="vela-sidebar"
-        style={{ width: COLLAPSED_SIDEBAR_WIDTH }}
-        className="flex shrink-0 flex-col items-center bg-[var(--vela-sidebar-bg)] text-[var(--vela-sidebar-fg)]"
+        style={{ width: COLLAPSED_SIDEBAR_WIDTH, '--vf-glass': 'var(--vela-sidebar-bg)' } as CSSProperties}
+        className="vf-glass flex shrink-0 flex-col items-center text-[var(--vela-sidebar-fg)]"
       >
         <button className="vf-icon-btn mt-2" title="Mostrar los sitios" aria-label="Mostrar los sitios" onClick={onToggleCollapsed}>
           <PanelLeftOpen size={16} />
@@ -380,7 +380,11 @@ export function SitesSidebar({ width, collapsed, onToggleCollapsed }: SitesSideb
   }
 
   return (
-    <aside id="vela-sidebar" style={{ width }} className="flex shrink-0 flex-col bg-[var(--vela-sidebar-bg)] text-[var(--vela-sidebar-fg)]">
+    <aside
+      id="vela-sidebar"
+      style={{ width, '--vf-glass': 'var(--vela-sidebar-bg)' } as CSSProperties}
+      className="vf-glass flex shrink-0 flex-col text-[var(--vela-sidebar-fg)]"
+    >
       <div className="flex items-center justify-between px-3 pb-1 pt-3">
         <span className="vf-panel-title">Sitios</span>
         <span className="flex">

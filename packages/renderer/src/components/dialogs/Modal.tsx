@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 
 interface ModalProps {
   title: string;
@@ -52,8 +52,8 @@ export function Modal({ title, onClose, children, footer, width = 440 }: ModalPr
         aria-modal="true"
         aria-label={title}
         onKeyDown={onKeyDown}
-        style={{ width }}
-        className="flex max-h-[76vh] max-w-[92vw] flex-col overflow-hidden rounded-[var(--vela-radius-lg)] border border-[var(--vela-border)] bg-[var(--vela-bg-elevated)] shadow-2xl"
+        style={{ width, '--vf-glass': 'var(--vela-bg-elevated)' } as CSSProperties}
+        className="vf-glass flex max-h-[76vh] max-w-[92vw] flex-col overflow-hidden rounded-[var(--vela-radius-lg)] border border-[var(--vela-border)] shadow-2xl"
       >
         <header className="border-b border-[var(--vela-border)] px-4 py-3 text-sm font-semibold">{title}</header>
         <div className="flex-1 overflow-auto px-4 py-3 text-xs">{children}</div>

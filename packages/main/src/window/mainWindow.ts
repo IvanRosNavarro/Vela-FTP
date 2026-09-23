@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { release } from 'node:os';
 import { app, BrowserWindow } from 'electron';
 import { IPC_EVENTS } from '@vela-ftp/shared';
 import type { ShortcutTable } from 'vela-kit/commands';
@@ -9,6 +10,18 @@ import { titleBarWindowOptions, watchMaximized, type DesktopPlatform } from 'vel
 import { suspendedShortcutWindows } from '../commands';
 import { DEV_SERVER_ORIGIN } from '../ipc/guard';
 import { APP_URL } from '../protocol/appProtocol';
+
+/** El acrylic de Windows pide 11 22H2 (build 22621); antes no existe el material. */
+function acrylicSupported(platform: DesktopPlatform): boolean {
+  if (platform !== 'win32') return false;
+  return parseInt(release().split('.')[2] ?? '0', 10) >= 22621;
+}
+
+/**
+ * Si el SO difumina de verdad detrás de la ventana. Lo consulta Ajustes para
+ * decir si el cristal será nativo o un desenfoque solo de CSS.
+ */
+export const backgroundMaterialSupported = { value: false };
 
 export interface ShellWindowOptions {
   /** Tema guardado, para que el marco nativo nazca con su color y no parpadee. */
@@ -30,6 +43,7 @@ export function createShellWindow(options: ShellWindowOptions): BrowserWindow {
   const platform = process.platform as DesktopPlatform;
   const theme = resolveTheme(options.themeId, options.prefersDark);
   const bg = theme.variables['--vela-bg'] ?? '#0e0f12';
+  const acrylic = acrylicSupported(platform);
 
   const win = new BrowserWindow({
     width: options.width,
@@ -37,8 +51,11 @@ export function createShellWindow(options: ShellWindowOptions): BrowserWindow {
     minWidth: options.minWidth,
     minHeight: options.minHeight,
     title: options.title,
-    backgroundColor: bg,
+    // Con acrylic el fondo va transparente para que el material del SO se vea;
+    // el renderer pinta su color sólido salvo que el cristal esté activo.
+    backgroundColor: acrylic ? '#00000000' : bg,
     show: false,
+    ...(platform === 'darwin' ? { vibrancy: 'sidebar' as const } : {}),
     ...titleBarWindowOptions(platform, {
       color: theme.variables['--vela-titlebar-bg'] ?? '#1a1a1a',
       symbolColor: theme.variables['--vela-titlebar-fg'] ?? '#e0e0e0',
@@ -51,6 +68,18 @@ export function createShellWindow(options: ShellWindowOptions): BrowserWindow {
       webSecurity: true,
     },
   });
+
+  if (acrylic) {
+    try {
+      win.setBackgroundMaterial('acrylic');
+      backgroundMaterialSupported.value = true;
+    } catch (err) {
+      backgroundMaterialSupported.value = false;
+      logger.warn('[window] el material acrylic no se pudo aplicar', err);
+    }
+  } else if (platform === 'darwin') {
+    backgroundMaterialSupported.value = true;
+  }
 
   win.once('ready-to-show', () => win.show());
 
