@@ -4,7 +4,7 @@ import { createProject } from '../components/SitesSidebar';
 import { addBookmarkFor } from './bookmarks';
 import { call, errorText } from './ipc';
 import { useDialogStore } from '../stores/dialogStore';
-import { remotePaneKey, usePanesStore, type PaneKey } from '../stores/panesStore';
+import { localPaneKey, remotePaneKey, usePanesStore, type PaneKey } from '../stores/panesStore';
 import { ACTIVE_STATUSES, FAILED_STATUSES, useQueueStore } from '../stores/queueStore';
 import { useSessionsStore } from '../stores/sessionsStore';
 import { useUiStore } from '../stores/uiStore';
@@ -14,7 +14,7 @@ import { toggleSyncBrowsing } from './syncBrowsing';
 /** Panel con el foco; si es el remoto y no hay sesión, el local. */
 function focusedPaneKey(): PaneKey {
   const { activeId } = useSessionsStore.getState();
-  return useUiStore.getState().focusedPane === 'remote' && activeId ? remotePaneKey(activeId) : 'local';
+  return useUiStore.getState().focusedPane === 'remote' && activeId ? remotePaneKey(activeId) : localPaneKey(activeId);
 }
 
 /** Ejecuta en la interfaz una acción pedida por un comando de main. */
@@ -63,14 +63,14 @@ export function runCommandAction(action: CommandAction): void {
         toast('Los marcadores son de carpetas remotas: conéctate a un sitio', 'info');
         return;
       }
-      void addBookmarkFor(active.siteId, path);
+      void addBookmarkFor(active.siteId, path, active.sessionId);
       return;
     }
     case 'toggle-hidden':
       panes.toggleHidden(focusedPaneKey());
       return;
     case 'refresh':
-      void panes.refresh('local');
+      void panes.refresh(localPaneKey(sessions.activeId));
       if (sessions.activeId) void panes.refresh(remotePaneKey(sessions.activeId));
       return;
     case 'toggle-compare':

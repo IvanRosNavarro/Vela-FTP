@@ -33,3 +33,7 @@
   carpetas remotas desde la vigilancia.
 - Primer arranque en dev: una vez el preload sandboxed falló con
   `binding.startupData` nulo (fallo de Electron, no reproducido al relanzar).
+- Marcadores creados entre la v1.1.0 y la v1.7.1: se guardaron sin carpeta
+  local (buscaban el panel `local` cuando ya era `local:<sessionId>`), así que
+  al abrirlos el panel local no se mueve. No se reparan solos; hay que volver
+  a crearlos.
