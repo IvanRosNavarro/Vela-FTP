@@ -178,16 +178,16 @@ export function Workspace() {
           ))}
           </div>
           <div className="flex items-center gap-0.5 pb-1">
-            {activeIsSftp && (
-              <button
-                className={`vf-icon-btn ${terminalShown && !viewingTab ? 'bg-[var(--vela-sidebar-active-bg)] text-[var(--vela-accent)]' : ''}`}
-                aria-pressed={terminalShown}
-                title="Terminal SSH (Ctrl+`)"
-                onClick={toggleTerminal}
-              >
-                <SquareTerminal size={14} />
-              </button>
-            )}
+            {/* También en FTP, desactivado: así se descubre que existe y por qué no se puede. */}
+            <button
+              className={`vf-icon-btn ${terminalShown && !viewingTab ? 'bg-[var(--vela-sidebar-active-bg)] text-[var(--vela-accent)]' : ''}`}
+              aria-pressed={terminalShown}
+              disabled={!activeIsSftp}
+              title={activeIsSftp ? 'Terminal SSH (Ctrl+`)' : 'Terminal SSH: solo en sitios SFTP (cambia el protocolo del sitio a SFTP)'}
+              onClick={toggleTerminal}
+            >
+              <SquareTerminal size={14} />
+            </button>
             <button
               className={`vf-icon-btn ${compareMode ? 'bg-[var(--vela-sidebar-active-bg)] text-[var(--vela-accent)]' : ''}`}
               aria-pressed={compareMode}

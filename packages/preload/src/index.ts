@@ -135,6 +135,8 @@ const api: PreloadApi = {
     write: (terminalId, data) => sendToTerminal(terminalId, { t: 'data', data }),
     writeBinary: (terminalId, data) => sendToTerminal(terminalId, { t: 'binary', data }),
     resize: (terminalId, cols, rows) => sendToTerminal(terminalId, { t: 'resize', cols, rows }),
+    setMonitor: (terminalId, enabled) => sendToTerminal(terminalId, { t: 'monitor', enabled }),
+    setDiskPath: (terminalId, path) => sendToTerminal(terminalId, { t: 'disk-path', path }),
     close: (terminalId) => {
       const channel = terminals.get(terminalId);
       if (!channel) return;

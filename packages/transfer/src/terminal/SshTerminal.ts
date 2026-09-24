@@ -2,6 +2,7 @@ import type { Client, ClientChannel } from 'ssh2';
 import { terminalInputSchema, type ConnectionConfig, type TerminalOutput } from '@vela-ftp/shared';
 import type { LogSink } from '../fs/RemoteFs';
 import { connectSsh, mapSshError } from '../fs/sshConnect';
+import { ServerMonitor } from './serverStats';
 
 /** Extremo del MessagePort de una terminal, visto desde el motor. */
 export interface TerminalPort {
@@ -24,6 +25,8 @@ export class SshTerminal {
   /** Salida pendiente de enviar: se agrupa por vuelta del bucle de eventos. */
   private pending: Buffer[] = [];
   private flushScheduled = false;
+  private monitor: ServerMonitor | null = null;
+  private diskPath: string | null = null;
 
   constructor(
     readonly id: string,
@@ -93,7 +96,37 @@ export class SshTerminal {
       case 'close':
         this.close();
         return;
+      case 'monitor':
+        this.setMonitor(message.enabled);
+        return;
+      case 'disk-path':
+        this.diskPath = message.path;
+        this.monitor?.setDiskPath(message.path);
+        return;
     }
+  }
+
+  /** Estado del servidor por un canal aparte de la misma conexión. */
+  private setMonitor(enabled: boolean): void {
+    if (!enabled) {
+      this.monitor?.stop();
+      this.monitor = null;
+      return;
+    }
+    if (this.monitor || !this.conn) return;
+    const send = (message: TerminalOutput) => {
+      if (!this.finished) this.port.postMessage(message);
+    };
+    this.monitor = new ServerMonitor(this.conn, {
+      stats: (stats) => send({ t: 'stats', stats }),
+      disk: (disk) => send({ t: 'disk', disk }),
+      unavailable: (reason) => {
+        this.monitor = null;
+        send({ t: 'stats-unavailable', reason });
+      },
+    });
+    this.monitor.setDiskPath(this.diskPath);
+    this.monitor.start();
   }
 
   private push(chunk: Buffer): void {
@@ -112,9 +145,11 @@ export class SshTerminal {
     this.port.postMessage({ t: 'data', data });
   }
 
-  private finish(last: Exclude<TerminalOutput, { t: 'data' }>): void {
+  private finish(last: Extract<TerminalOutput, { t: 'exit' | 'lost' }>): void {
     if (this.finished) return;
     this.finished = true;
+    this.monitor?.stop();
+    this.monitor = null;
     this.flush();
     this.port.postMessage(last);
     this.port.close();

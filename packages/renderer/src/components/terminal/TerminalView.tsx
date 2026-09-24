@@ -4,6 +4,7 @@ import { ensureRuntime, type TerminalRuntime } from '../../lib/terminal/runtime'
 import { remotePaneKey, usePanesStore } from '../../stores/panesStore';
 import type { TerminalTab } from '../../stores/terminalsStore';
 import { useContextMenu } from '../ContextMenu';
+import { ServerStatsBar } from './ServerStatsBar';
 
 const MOD = window.api.platform === 'darwin' ? '⌘' : 'Ctrl';
 
@@ -75,6 +76,9 @@ export function TerminalView({ tab }: { tab: TerminalTab }) {
     };
   }, [runtime]);
 
+  // El disco que se mide es el de la carpeta que se ve en el panel remoto.
+  useEffect(() => runtime.setDiskPath(remotePath), [runtime, remotePath]);
+
   const closeSearch = () => {
     setSearching(false);
     runtime.search.clearDecorations();
@@ -106,9 +110,10 @@ export function TerminalView({ tab }: { tab: TerminalTab }) {
   };
 
   return (
-    <div className="relative flex min-h-0 min-w-0 flex-1" style={{ background: 'var(--vela-bg)' }}>
+    <div className="relative flex min-h-0 min-w-0 flex-1 flex-col" style={{ background: 'var(--vela-bg)' }}>
       {searching && <SearchBar runtime={runtime} onClose={closeSearch} />}
       <div ref={ref} className="min-h-0 min-w-0 flex-1 overflow-hidden py-1 pl-2" onContextMenu={onContextMenu} />
+      <ServerStatsBar runtime={runtime} />
     </div>
   );
 }

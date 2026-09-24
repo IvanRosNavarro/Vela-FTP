@@ -101,7 +101,15 @@ export class SftpFs implements RemoteFs {
       this.sftp = await promisify<SFTPWrapper>((cb) => conn.sftp(cb));
     } catch (err) {
       conn.end();
-      throw mapSftpError(err);
+      const failure = mapSftpError(err);
+      this.log('error', `No se pudo abrir SFTP: ${failure.message}`);
+      if (failure.code === 'TIMEOUT') throw failure;
+      // Autenticado pero sin SFTP: el usuario no tiene acceso por SSH (Plesk y
+      // cPanel lo tienen en «Prohibido» o «/bin/false»), o el servidor no tiene
+      // el subsistema sftp.
+      throw new TransferFailure('PROTOCOL', 'El servidor acepta el usuario pero no le deja usar SFTP. Activa su acceso SSH en el panel del hosting', {
+        reason: failure.message,
+      });
     }
 
     this.isClosed = false;

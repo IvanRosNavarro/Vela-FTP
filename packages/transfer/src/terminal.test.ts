@@ -162,3 +162,48 @@ describe('terminal SSH', () => {
     engine.dispose();
   });
 });
+
+describe('estado del servidor', () => {
+  it('con el monitor encendido llegan CPU, RAM, red y el disco de la carpeta', async () => {
+    const engine = new TransferEngine({ send: () => undefined });
+    await openSession(engine, 's6');
+    const p = fakePort();
+    await engine.call('terminal.open', { terminalId: 't6', sessionId: 's6', cols: 80, rows: 24 }, [p.port]);
+    p.send({ t: 'disk-path', path: '/var/www' });
+    p.send({ t: 'monitor', enabled: true });
+
+    await waitFor(() => p.received.some((m) => m.t === 'stats' && m.stats.cpu !== null));
+    const stats = p.received.filter((m) => m.t === 'stats').at(-1) as Extract<TerminalOutput, { t: 'stats' }>;
+    expect(stats.stats).toMatchObject({ cores: 2, memTotal: 1000 * 1024, memUsed: 600 * 1024, load: [0.5, 0.4, 0.3] });
+    expect(stats.stats.cpu).toBeCloseTo(50);
+    expect(stats.stats.rxRate).toBeGreaterThan(0);
+
+    await waitFor(() => p.received.some((m) => m.t === 'disk'));
+    expect(p.received.find((m) => m.t === 'disk')).toEqual({ t: 'disk', disk: { path: '/var/www', mount: '/', total: 2000 * 1024, used: 500 * 1024 } });
+    expect(srv.execs.some((c) => c.endsWith("'/var/www'"))).toBe(true);
+
+    // Apagarlo corta el envío.
+    p.send({ t: 'monitor', enabled: false });
+    await new Promise((r) => setTimeout(r, 150));
+    const count = p.received.length;
+    await new Promise((r) => setTimeout(r, 200));
+    expect(p.received.length).toBe(count);
+    engine.dispose();
+  });
+
+  it('en un servidor sin /proc avisa de que no está disponible', async () => {
+    srv.noProc = true;
+    try {
+      const engine = new TransferEngine({ send: () => undefined });
+      await openSession(engine, 's7');
+      const p = fakePort();
+      await engine.call('terminal.open', { terminalId: 't7', sessionId: 's7', cols: 80, rows: 24 }, [p.port]);
+      p.send({ t: 'monitor', enabled: true });
+      await waitFor(() => p.received.some((m) => m.t === 'stats-unavailable'));
+      expect(p.received.find((m) => m.t === 'stats-unavailable')).toEqual({ t: 'stats-unavailable', reason: 'El servidor no da su estado (solo Linux, y sin shell enjaulada)' });
+      engine.dispose();
+    } finally {
+      srv.noProc = false;
+    }
+  });
+});
