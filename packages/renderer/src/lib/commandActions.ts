@@ -10,6 +10,7 @@ import { useSessionsStore } from '../stores/sessionsStore';
 import { useUiStore } from '../stores/uiStore';
 import { checkForUpdates, openUpdatesSettings } from './updates';
 import { toggleSyncBrowsing } from './syncBrowsing';
+import { openTerminal, toggleTerminal } from './terminal/actions';
 
 /** Panel con el foco; si es el remoto y no hay sesión, el local. */
 function focusedPaneKey(): PaneKey {
@@ -82,6 +83,12 @@ export function runCommandAction(action: CommandAction): void {
     case 'open-updates':
       openUpdatesSettings();
       void checkForUpdates();
+      return;
+    case 'toggle-terminal':
+      toggleTerminal();
+      return;
+    case 'new-terminal':
+      openTerminal(sessions.activeId);
       return;
     case 'toggle-bottom-panel':
       useUiStore.getState().toggleBottomPanel();

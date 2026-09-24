@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { ArrowDown, ArrowUp, CircleAlert, CircleCheck, CircleX, Clock, Loader2, Radar, RotateCcw, Square, Trash2, X } from 'lucide-react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { ArrowDown, ArrowUp, CircleAlert, CircleCheck, CircleX, Clock, Loader2, Plus, Radar, RotateCcw, Square, Trash2, X } from 'lucide-react';
 import { List, type RowComponentProps } from 'react-window';
 import type { JobSnapshot, ProtocolLogLine } from '@vela-ftp/shared';
 import { toast } from 'vela-kit/ui';
@@ -11,6 +11,12 @@ import { useSessionsStore } from '../../stores/sessionsStore';
 import { stopWatch, useWatchStore } from '../../stores/watchStore';
 import { formatDate } from '../../lib/format';
 import { useContextMenu } from '../ContextMenu';
+import { openTerminal } from '../../lib/terminal/actions';
+import { useTerminalsStore } from '../../stores/terminalsStore';
+import { StatusDot, TerminalActions } from '../terminal/TerminalChrome';
+
+// xterm solo se descarga al abrir la primera terminal.
+const TerminalPane = lazy(() => import('../terminal/TerminalPane'));
 
 /** Prefijo de sesión de los trabajos recuperados de una ejecución anterior. */
 const RESTORED = 'restored:';
@@ -152,6 +158,12 @@ function WatchList() {
 
 export function BottomPanel({ height }: { height: number }) {
   const [tab, setTab] = useState<Tab>('queue');
+  const terminals = useTerminalsStore((s) => s.tabs);
+  const selectedTerminal = useTerminalsStore((s) => s.selected);
+  const activeSession = useSessionsStore((s) => s.sessions.find((x) => x.sessionId === s.activeId) ?? null);
+  const panelTerminals = useMemo(() => terminals.filter((t) => t.placement === 'panel'), [terminals]);
+  // Una terminal elegida manda sobre las pestañas propias del panel.
+  const terminal = panelTerminals.find((t) => t.id === selectedTerminal) ?? null;
   const jobsById = useQueueStore((s) => s.jobs);
   const order = useQueueStore((s) => s.order);
   const log = useQueueStore((s) => s.log);
@@ -230,9 +242,12 @@ export function BottomPanel({ height }: { height: number }) {
   const tabButton = (id: Tab, label: string, count?: number) => (
     <button
       role="tab"
-      aria-selected={tab === id}
-      onClick={() => setTab(id)}
-      className={`border-b-2 px-3 py-1.5 text-xs ${tab === id ? 'border-[var(--vela-accent)] text-[var(--vela-fg)]' : 'border-transparent text-[var(--vela-fg-muted)] hover:text-[var(--vela-fg)]'}`}
+      aria-selected={tab === id && !terminal}
+      onClick={() => {
+        setTab(id);
+        useTerminalsStore.getState().select(null);
+      }}
+      className={`border-b-2 px-3 py-1.5 text-xs ${tab === id && !terminal ? 'border-[var(--vela-accent)] text-[var(--vela-fg)]' : 'border-transparent text-[var(--vela-fg-muted)] hover:text-[var(--vela-fg)]'}`}
     >
       {label}
       {count !== undefined && count > 0 && <span className="ml-1.5 rounded-full bg-black/20 px-1.5 text-[10px]">{count}</span>}
@@ -244,14 +259,46 @@ export function BottomPanel({ height }: { height: number }) {
       style={{ height, '--vf-glass': 'var(--vela-bg-elevated)' } as CSSProperties}
       className="vf-glass flex shrink-0 flex-col border-t border-[var(--vela-border)]"
     >
-      <div className="flex items-center justify-between pr-2" role="tablist">
-        <div className="flex">
+      <div className="flex items-center justify-between gap-2 pr-2" role="tablist">
+        <div className="flex min-w-0 overflow-x-auto">
           {tabButton('queue', 'Cola', lists.queue.length)}
           {tabButton('failed', 'Fallidas', lists.failed.length)}
           {tabButton('done', 'Completadas', lists.done.length)}
           {tabButton('watch', 'Vigilancia', watchCount)}
           {tabButton('log', 'Registro')}
+          {panelTerminals.map((t) => (
+            <div
+              key={t.id}
+              role="tab"
+              aria-selected={t.id === terminal?.id}
+              title={`Terminal SSH de ${t.title}`}
+              onMouseDown={() => useTerminalsStore.getState().select(t.id)}
+              onAuxClick={(e) => e.button === 1 && useTerminalsStore.getState().close(t.id)}
+              className={`flex max-w-[200px] cursor-default items-center gap-1.5 border-b-2 py-1.5 pl-3 pr-1 text-xs ${
+                t.id === terminal?.id ? 'border-[var(--vela-accent)] text-[var(--vela-fg)]' : 'border-transparent text-[var(--vela-fg-muted)] hover:text-[var(--vela-fg)]'
+              }`}
+            >
+              <StatusDot status={t.status} />
+              <span className="truncate">{t.title}</span>
+              <button
+                className="rounded p-0.5 opacity-50 hover:bg-black/20 hover:opacity-100"
+                title="Cerrar la terminal"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={() => useTerminalsStore.getState().close(t.id)}
+              >
+                <X size={11} />
+              </button>
+            </div>
+          ))}
+          {activeSession?.protocol === 'sftp' && (
+            <button className="vf-icon-btn ml-1 self-center" title={`Nueva terminal SSH en ${activeSession.siteName} (Ctrl+Shift+\`)`} onClick={() => openTerminal(activeSession.sessionId)}>
+              <Plus size={13} />
+            </button>
+          )}
         </div>
+        {terminal ? (
+          <TerminalActions tab={terminal} />
+        ) : (
         <div className="flex items-center gap-1">
           {tab === 'queue' && running.length > 0 && (
             <span className="mr-2 text-[11px] tabular-nums text-[var(--vela-fg-muted)]">
@@ -284,9 +331,14 @@ export function BottomPanel({ height }: { height: number }) {
             </>
           )}
         </div>
+        )}
       </div>
-      <div className="min-h-0 flex-1" role="tabpanel">
-        {tab === 'watch' ? (
+      <div className={terminal ? 'flex min-h-0 flex-1 flex-col' : 'min-h-0 flex-1'} role="tabpanel">
+        {terminal ? (
+          <Suspense fallback={null}>
+            <TerminalPane tab={terminal} />
+          </Suspense>
+        ) : tab === 'watch' ? (
           <WatchList />
         ) : tab === 'log' ? (
           log.length === 0 ? (

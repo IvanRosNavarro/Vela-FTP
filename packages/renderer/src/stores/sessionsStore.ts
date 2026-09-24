@@ -5,6 +5,7 @@ import { AppError, call, errorText } from '../lib/ipc';
 import { useDialogStore } from './dialogStore';
 import { localPaneKey, remotePaneKey, usePanesStore } from './panesStore';
 import { useSitesStore } from './sitesStore';
+import { useTerminalsStore } from './terminalsStore';
 
 interface SessionsState {
   sessions: SessionInfo[];
@@ -112,6 +113,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
   activate: (sessionId) => set({ activeId: sessionId }),
 
   markLost(sessionId) {
+    useTerminalsStore.getState().closeSession(sessionId);
     usePanesStore.getState().drop(remotePaneKey(sessionId));
     usePanesStore.getState().drop(localPaneKey(sessionId));
     set((s) => {

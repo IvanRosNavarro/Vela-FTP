@@ -14,6 +14,8 @@ export interface TestSftpServer {
   modes: Map<string, number>;
   /** Huella SHA256 de la clave de host del servidor. */
   fingerprint: string;
+  /** Tamaños de pty pedidos (al abrir y en cada `window-change`). */
+  ptySizes: Array<{ cols: number; rows: number; term?: string }>;
   close(): Promise<void>;
 }
 
@@ -49,6 +51,7 @@ export async function startSftpServer(root: string, user: string, pass: string):
   const local = (remotePath: string) => path.join(root, ...path.posix.resolve('/', remotePath).split('/').filter(Boolean));
   const clients = new Set<{ end(): void }>();
   const modes: Modes = new Map();
+  const ptySizes: TestSftpServer['ptySizes'] = [];
 
   const server = new Server({ hostKeys: [keys.private] }, (client) => {
     clients.add(client);
@@ -61,6 +64,35 @@ export async function startSftpServer(root: string, user: string, pass: string):
     client.on('ready', () => {
       client.on('session', (acceptSession) => {
         const session = acceptSession();
+        // Shell de juguete: saluda, devuelve lo que recibe y termina con `exit`.
+        session.on('pty', (accept, _reject, info) => {
+          // ssh2 da el TERM pedido aunque sus tipos no lo declaren.
+          ptySizes.push({ cols: info.cols, rows: info.rows, term: (info as { term?: string }).term });
+          accept?.();
+        });
+        session.on('window-change', (accept, _reject, info) => {
+          ptySizes.push({ cols: info.cols, rows: info.rows });
+          accept?.();
+        });
+        session.on('shell', (accept) => {
+          const channel = accept();
+          channel.write('bienvenido\r\n$ ');
+          let line = '';
+          channel.on('data', (chunk: Buffer) => {
+            line += chunk.toString('utf8');
+            let nl: number;
+            while ((nl = line.search(/[\r\n]/)) >= 0) {
+              const command = line.slice(0, nl);
+              line = line.slice(nl + 1);
+              if (command === 'exit') {
+                channel.exit(3);
+                channel.end();
+                return;
+              }
+              if (command) channel.write(`eco:${command}\r\n$ `);
+            }
+          });
+        });
         session.on('sftp', (acceptSftp) => {
           const sftp = acceptSftp();
           const handles = new Map<number, { fd?: number; path?: string; dir?: string; listed?: boolean }>();
@@ -173,6 +205,7 @@ export async function startSftpServer(root: string, user: string, pass: string):
     port: (server.address() as AddressInfo).port,
     modes,
     fingerprint,
+    ptySizes,
     close: () =>
       new Promise<void>((resolve) => {
         for (const c of clients) c.end();

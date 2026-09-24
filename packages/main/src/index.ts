@@ -9,6 +9,7 @@ import { registerSettingsHandlers } from './ipc/settings';
 import { registerWindowHandlers } from './ipc/window';
 import { applyDevCsp, registerAppProtocol, registerAppSchemeAsPrivileged } from './protocol/appProtocol';
 import { registerAppHandlers } from './ipc/app';
+import { registerTerminalHandlers } from './ipc/terminal';
 import { osKeychain } from './security/keychain';
 import { SecretStore } from './security/SecretStore';
 import { SessionManager } from './sessions/SessionManager';
@@ -123,6 +124,7 @@ if (!app.requestSingleInstanceLock()) {
     const bookmarks = new BookmarksRepository(db);
     const history = new PathHistoryRepository(db);
     registerAppHandlers({ sites, knownHosts, secrets, sessions, transfer, queue, history });
+    registerTerminalHandlers(sessions, transfer);
 
     void cleanTempRoot();
     const editor = new EditorManager({

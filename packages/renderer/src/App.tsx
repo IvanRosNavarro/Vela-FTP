@@ -21,6 +21,7 @@ import { useUpdatesStore } from './stores/updatesStore';
 import { useWatchStore } from './stores/watchStore';
 import { useSyncStore } from './stores/syncStore';
 import { confirmDialog, useDialogStore } from './stores/dialogStore';
+import { loadTerminalAppearance } from './lib/terminal/appearance';
 
 async function readSetting<K extends 'ui:bottom-panel-height' | 'ui:sidebar-width' | 'ui:sidebar-collapsed' | 'local:last-path'>(key: K) {
   const res = await window.api.settings.get(key);
@@ -151,6 +152,7 @@ export function App() {
     void call(window.api.updates.status()).then(applyUpdateStatus).catch(() => undefined);
     void call(window.api.watch.list()).then(useWatchStore.getState().setWatches).catch(() => undefined);
     void useSyncStore.getState().load();
+    void loadTerminalAppearance().catch(() => undefined);
     void call(window.api.settings.get('files:open-with')).then(useUiStore.getState().setOpenWith).catch(() => undefined);
     void call(window.api.settings.get('ui:columns-remote')).then((c) => useUiStore.getState().setColumns('remote', c)).catch(() => undefined);
     void call(window.api.settings.get('ui:columns-local')).then((c) => useUiStore.getState().setColumns('local', c)).catch(() => undefined);

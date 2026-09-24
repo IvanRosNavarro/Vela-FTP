@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { GitCompareArrows, Link2, Plus, Unplug, X } from 'lucide-react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { GitCompareArrows, Link2, Plus, SquareTerminal, Unplug, X } from 'lucide-react';
 import { SiteIcon } from './SiteIcon';
 import { QUICK_CONNECT_SITES, mostUsedFirst } from '../lib/quickConnect';
 import { compareListings, type CompareStatus } from '../lib/compare';
@@ -9,8 +9,13 @@ import { localPaneKey, remotePaneKey, usePanesStore } from '../stores/panesStore
 import { useSessionsStore } from '../stores/sessionsStore';
 import { useSitesStore } from '../stores/sitesStore';
 import { useUiStore } from '../stores/uiStore';
+import { useTerminalsStore } from '../stores/terminalsStore';
 import { COMPARE_COLORS, FilePane } from './panes/FilePane';
 import { call } from '../lib/ipc';
+import { toggleTerminal } from '../lib/terminal/actions';
+
+// xterm solo se descarga al abrir la primera terminal.
+const TerminalTabView = lazy(() => import('./terminal/TerminalTabView'));
 
 /** Límites del reparto: ningún panel puede quedarse sin sitio. */
 const MIN_RATIO = 0.15;
@@ -76,8 +81,21 @@ export function Workspace() {
   const syncBrowsing = useUiStore((s) => s.syncBrowsing);
   const localEntries = usePanesStore((s) => s.panes[localPaneKey(activeId)]?.entries);
   const remoteEntries = usePanesStore((s) => (activeId ? s.panes[remotePaneKey(activeId)]?.entries : undefined));
+  const terminals = useTerminalsStore((s) => s.tabs);
+  const viewing = useTerminalsStore((s) => s.viewing);
+  const selectedTerminal = useTerminalsStore((s) => s.selected);
+  const bottomVisible = useUiStore((s) => s.bottomPanelVisible);
+  const terminalTabs = terminals.filter((t) => t.placement === 'tab');
+  const viewingTab = terminalTabs.find((t) => t.id === viewing) ?? null;
+  const terminalShown = bottomVisible && terminals.some((t) => t.id === selectedTerminal && t.placement === 'panel');
+  const activeIsSftp = sessions.find((s) => s.sessionId === activeId)?.protocol === 'sftp';
 
   useSyncBrowsing();
+
+  // Cambiar de sesión (Ctrl+Tab, desconectar) deja de mostrar la terminal de otra.
+  useEffect(() => {
+    if (viewingTab && viewingTab.sessionId !== activeId) useTerminalsStore.getState().view(null);
+  }, [viewingTab, activeId]);
 
   // Reparto entre el panel local y el remoto, en proporción: al cambiar el
   // tamaño de la ventana cada uno conserva su parte.
@@ -108,11 +126,14 @@ export function Workspace() {
             <div
               key={session.sessionId}
               role="tab"
-              aria-selected={session.sessionId === activeId}
-              onMouseDown={() => activate(session.sessionId)}
+              aria-selected={session.sessionId === activeId && !viewingTab}
+              onMouseDown={() => {
+                activate(session.sessionId);
+                useTerminalsStore.getState().view(null);
+              }}
               onAuxClick={(e) => e.button === 1 && void disconnect(session.sessionId)}
               className={`group flex max-w-[220px] cursor-default items-center gap-2 rounded-t-md px-3 py-1 text-xs ${
-                session.sessionId === activeId ? 'bg-[var(--vela-tab-active-bg)] text-[var(--vela-fg)]' : 'text-[var(--vela-fg-muted)] hover:bg-[var(--vela-sidebar-hover-bg)]'
+                session.sessionId === activeId && !viewingTab ? 'bg-[var(--vela-tab-active-bg)] text-[var(--vela-fg)]' : 'text-[var(--vela-fg-muted)] hover:bg-[var(--vela-sidebar-hover-bg)]'
               }`}
               title={`${session.protocol}://${session.host}`}
             >
@@ -128,8 +149,45 @@ export function Workspace() {
               </button>
             </div>
           ))}
+          {terminalTabs.map((tab) => (
+            <div
+              key={tab.id}
+              role="tab"
+              aria-selected={tab.id === viewing}
+              onMouseDown={() => {
+                activate(tab.sessionId);
+                useTerminalsStore.getState().view(tab.id);
+              }}
+              onAuxClick={(e) => e.button === 1 && useTerminalsStore.getState().close(tab.id)}
+              className={`group flex max-w-[220px] cursor-default items-center gap-2 rounded-t-md px-3 py-1 text-xs ${
+                tab.id === viewing ? 'bg-[var(--vela-tab-active-bg)] text-[var(--vela-fg)]' : 'text-[var(--vela-fg-muted)] hover:bg-[var(--vela-sidebar-hover-bg)]'
+              }`}
+              title={`Terminal de ${tab.title}`}
+            >
+              <SquareTerminal size={12} className="shrink-0" />
+              <span className="truncate">{tab.title}</span>
+              <button
+                className="rounded p-0.5 opacity-50 hover:bg-black/20 hover:opacity-100"
+                title="Cerrar la terminal"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={() => useTerminalsStore.getState().close(tab.id)}
+              >
+                <X size={11} />
+              </button>
+            </div>
+          ))}
           </div>
           <div className="flex items-center gap-0.5 pb-1">
+            {activeIsSftp && (
+              <button
+                className={`vf-icon-btn ${terminalShown && !viewingTab ? 'bg-[var(--vela-sidebar-active-bg)] text-[var(--vela-accent)]' : ''}`}
+                aria-pressed={terminalShown}
+                title="Terminal SSH (Ctrl+`)"
+                onClick={toggleTerminal}
+              >
+                <SquareTerminal size={14} />
+              </button>
+            )}
             <button
               className={`vf-icon-btn ${compareMode ? 'bg-[var(--vela-sidebar-active-bg)] text-[var(--vela-accent)]' : ''}`}
               aria-pressed={compareMode}
@@ -149,8 +207,13 @@ export function Workspace() {
           </div>
         </div>
       )}
-      {comparison && <CompareLegend />}
-      <div ref={panesRef} className="flex min-h-0 flex-1">
+      {comparison && !viewingTab && <CompareLegend />}
+      {viewingTab && (
+        <Suspense fallback={<div className="flex-1" />}>
+          <TerminalTabView tab={viewingTab} />
+        </Suspense>
+      )}
+      <div ref={panesRef} className={viewingTab ? 'hidden' : 'flex min-h-0 flex-1'}>
         <div className="flex min-h-0 min-w-0" style={{ flex: `0 0 ${ratio * 100}%` }}>
           {sessions.length === 0 ? (
             <FilePane paneKey="local" sessionId={null} focused={focused === 'local'} onFocus={() => setFocused('local')} compare={null} />

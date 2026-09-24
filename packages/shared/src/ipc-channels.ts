@@ -109,6 +109,10 @@ export const IPC_CHANNELS = {
   WATCH_START: 'watch:start',
   WATCH_STOP: 'watch:stop',
 
+  TERMINAL_OPEN: 'terminal:open',
+  TERMINAL_FOCUS: 'terminal:focus',
+  TERMINAL_OPEN_LINK: 'terminal:open-link',
+
   UPDATES_STATUS: 'updates:status',
   UPDATES_CHECK: 'updates:check',
   UPDATES_DOWNLOAD: 'updates:download',
@@ -138,6 +142,12 @@ export const IPC_EVENTS = {
   /** La sincronización ha traído datos nuevos: el renderer recarga sitios y marcadores. */
   SYNC_DATA_CHANGED: 'state:sync-data-changed',
 } as const;
+
+/**
+ * main → preload: el extremo del MessagePort de una terminal recién abierta.
+ * No está en IPC_EVENTS: lo recoge el preload y el renderer nunca ve el puerto.
+ */
+export const TERMINAL_PORT_CHANNEL = 'state:terminal-port';
 
 export type IpcEventName = (typeof IPC_EVENTS)[keyof typeof IPC_EVENTS];
 

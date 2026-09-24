@@ -13,6 +13,29 @@ export const defineCommand = createCommandDefiner<CommandContext, CommandCategor
 /** Ventanas con los atajos suspendidos (capturando uno nuevo en ajustes). */
 export const suspendedShortcutWindows = new Set<number>();
 
+/**
+ * Ventanas con una terminal enfocada: sus teclas (Ctrl+C, Ctrl+W, Ctrl+R…) son
+ * del programa remoto, salvo los comandos de TERMINAL_KEEPS.
+ */
+export const terminalFocusedWindows = new Set<number>();
+
+/** Comandos cuyo atajo sigue funcionando con una terminal enfocada. */
+const TERMINAL_KEEPS: ReadonlySet<string> = new Set([
+  'app.commandPalette',
+  'navigation.nextSession',
+  'navigation.previousSession',
+  'terminal.toggle',
+  'terminal.new',
+  'window.new',
+  'window.toggleDevTools',
+]);
+
+/** true si la tecla debe llegar a la página aunque tenga un atajo de la app. */
+export function shortcutPassesThrough(windowId: number, commandId: string | undefined): boolean {
+  if (suspendedShortcutWindows.has(windowId)) return true;
+  return terminalFocusedWindows.has(windowId) && !(commandId && TERMINAL_KEEPS.has(commandId));
+}
+
 /** Reservado para la paleta de comandos: no se puede reasignar. */
 export { PALETTE_SHORTCUT } from '@vela-ftp/shared';
 
@@ -72,6 +95,9 @@ export function buildCommandRegistry(openWindow: () => void): CommandRegistry<Co
   // Mismos atajos que FileZilla.
   registry.register(uiCommand('view.toggleCompare', 'Comparar carpetas', 'view', 'toggle-compare', 'Ctrl+O'));
   registry.register(uiCommand('navigation.toggleSyncBrowsing', 'Navegación sincronizada', 'navigation', 'toggle-sync-browsing', 'Ctrl+Y'));
+  // Ctrl+` como en VS Code; con la terminal enfocada ese NUL no le hace falta a nadie.
+  registry.register(uiCommand('terminal.toggle', 'Mostrar u ocultar la terminal', 'terminal', 'toggle-terminal', 'Ctrl+`'));
+  registry.register(uiCommand('terminal.new', 'Nueva terminal SSH', 'terminal', 'new-terminal', 'Ctrl+Shift+`'));
   registry.register(uiCommand('transfer.cancelAll', 'Cancelar todas las transferencias', 'transfer', 'cancel-all'));
   registry.register(uiCommand('transfer.retryFailed', 'Reintentar las transferencias fallidas', 'transfer', 'retry-failed'));
 

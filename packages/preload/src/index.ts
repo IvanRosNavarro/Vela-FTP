@@ -1,10 +1,39 @@
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
 // Subpath: el índice de shared arrastraría zod y los schemas al preload.
-import { IPC_CHANNELS as C, IPC_EVENTS } from '@vela-ftp/shared/ipc-channels';
-import type { Platform, PreloadApi } from '@vela-ftp/shared';
+import { IPC_CHANNELS as C, IPC_EVENTS, TERMINAL_PORT_CHANNEL } from '@vela-ftp/shared/ipc-channels';
+import type { Platform, PreloadApi, TerminalInput, TerminalOutput } from '@vela-ftp/shared';
 
 const ALLOWED_EVENTS = new Set<string>(Object.values(IPC_EVENTS));
 const invoke = (channel: string, payload?: unknown) => ipcRenderer.invoke(channel, payload);
+
+// ── Terminales ────────────────────────────────────────────────────────────
+// main entrega aquí el extremo del MessagePort de cada terminal; el otro está
+// en el motor. El puerto no sale del preload: el renderer usa `api.terminal`.
+interface TerminalChannel {
+  port: MessagePort;
+  listener: ((message: TerminalOutput) => void) | null;
+  /** Salida recibida antes de que el renderer empiece a escuchar. */
+  buffer: TerminalOutput[];
+}
+const terminals = new Map<string, TerminalChannel>();
+const portWaiters = new Map<string, () => void>();
+const PORT_WAIT_MS = 5000;
+
+ipcRenderer.on(TERMINAL_PORT_CHANNEL, (event: IpcRendererEvent, payload: { terminalId?: unknown }) => {
+  const port = event.ports[0];
+  const terminalId = payload?.terminalId;
+  if (!port || typeof terminalId !== 'string') return;
+  const channel: TerminalChannel = { port, listener: null, buffer: [] };
+  port.onmessage = (e: MessageEvent<TerminalOutput>) => {
+    if (channel.listener) channel.listener(e.data);
+    else channel.buffer.push(e.data);
+  };
+  terminals.set(terminalId, channel);
+  portWaiters.get(terminalId)?.();
+  portWaiters.delete(terminalId);
+});
+
+const sendToTerminal = (terminalId: string, message: TerminalInput) => terminals.get(terminalId)?.port.postMessage(message);
 
 const api: PreloadApi = {
   platform: process.platform as Platform,
@@ -75,6 +104,46 @@ const api: PreloadApi = {
     trust: (input) => invoke(C.KNOWN_HOSTS_TRUST, input),
     knownHosts: () => invoke(C.KNOWN_HOSTS_LIST),
     forget: (host, port, fingerprint) => invoke(C.KNOWN_HOSTS_REMOVE, { host, port, fingerprint }),
+  },
+
+  terminal: {
+    open: async (sessionId, cols, rows) => {
+      const res = await invoke(C.TERMINAL_OPEN, { sessionId, cols, rows });
+      const terminalId: string | undefined = res?.ok ? res.data.terminalId : undefined;
+      // El puerto suele llegar antes que la respuesta, pero no está garantizado.
+      if (terminalId && !terminals.has(terminalId)) {
+        await new Promise<void>((resolve) => {
+          portWaiters.set(terminalId, resolve);
+          setTimeout(resolve, PORT_WAIT_MS);
+        });
+        portWaiters.delete(terminalId);
+      }
+      return res;
+    },
+    listen: (terminalId, listener) => {
+      const channel = terminals.get(terminalId);
+      if (!channel) {
+        listener({ t: 'lost', message: 'La terminal no existe' });
+        return () => undefined;
+      }
+      channel.listener = listener;
+      for (const message of channel.buffer.splice(0)) listener(message);
+      return () => {
+        if (channel.listener === listener) channel.listener = null;
+      };
+    },
+    write: (terminalId, data) => sendToTerminal(terminalId, { t: 'data', data }),
+    writeBinary: (terminalId, data) => sendToTerminal(terminalId, { t: 'binary', data }),
+    resize: (terminalId, cols, rows) => sendToTerminal(terminalId, { t: 'resize', cols, rows }),
+    close: (terminalId) => {
+      const channel = terminals.get(terminalId);
+      if (!channel) return;
+      terminals.delete(terminalId);
+      channel.port.postMessage({ t: 'close' } satisfies TerminalInput);
+      channel.port.close();
+    },
+    setFocused: (focused) => invoke(C.TERMINAL_FOCUS, { focused }),
+    openLink: (url) => invoke(C.TERMINAL_OPEN_LINK, { url }),
   },
 
   remote: {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Info, Keyboard, Palette, RefreshCw, Shield, SlidersHorizontal, Trash2, X } from 'lucide-react';
-import { COMMAND_CATEGORY_LABELS, type CommandInfo, type ConflictPolicy, type KnownHostInfo, type UpdateStatus } from '@vela-ftp/shared';
+import { Info, Keyboard, Palette, RefreshCw, Shield, SlidersHorizontal, SquareTerminal, Trash2, X } from 'lucide-react';
+import { COMMAND_CATEGORY_LABELS, SETTING_DEFAULTS, type CommandInfo, type ConflictPolicy, type KnownHostInfo, type UpdateStatus } from '@vela-ftp/shared';
 import { BUILTIN_THEMES } from 'vela-kit/theme';
 import { formatShortcut, shortcutFromKeyEvent, toast } from 'vela-kit/ui';
 import { AppError, call, errorText } from '../../lib/ipc';
@@ -9,15 +9,17 @@ import { confirmDialog, useDialogStore } from '../../stores/dialogStore';
 import { useSitesStore } from '../../stores/sitesStore';
 import { useUiStore } from '../../stores/uiStore';
 import { checkForUpdates, downloadUpdate, installUpdate } from '../../lib/updates';
+import { getTerminalAppearance, setTerminalAppearance, type TerminalAppearance } from '../../lib/terminal/appearance';
 import { useUpdatesStore } from '../../stores/updatesStore';
 import { SyncSection } from './SyncSection';
 import { Modal } from './Modal';
 
-type Section = 'general' | 'appearance' | 'shortcuts' | 'security' | 'sync' | 'about';
+type Section = 'general' | 'appearance' | 'terminal' | 'shortcuts' | 'security' | 'sync' | 'about';
 
 const SECTIONS: Array<{ id: Section; label: string; icon: typeof Palette }> = [
   { id: 'general', label: 'General', icon: SlidersHorizontal },
   { id: 'appearance', label: 'Apariencia', icon: Palette },
+  { id: 'terminal', label: 'Terminal', icon: SquareTerminal },
   { id: 'shortcuts', label: 'Atajos', icon: Keyboard },
   { id: 'security', label: 'Seguridad', icon: Shield },
   { id: 'sync', label: 'Sincronización', icon: RefreshCw },
@@ -206,6 +208,88 @@ function AppearanceSection() {
       })}
       </div>
       <GlassSection />
+    </div>
+  );
+}
+
+const SCROLLBACK_OPTIONS = [1000, 5000, 10_000, 50_000, 100_000];
+const TERMINAL_KEYS: Record<keyof TerminalAppearance, 'terminal:font-size' | 'terminal:font-family' | 'terminal:scrollback'> = {
+  fontSize: 'terminal:font-size',
+  fontFamily: 'terminal:font-family',
+  scrollback: 'terminal:scrollback',
+};
+
+function TerminalSection() {
+  const [appearance, setAppearance] = useState(getTerminalAppearance);
+  const [family, setFamily] = useState(appearance.fontFamily);
+  const mod = PLATFORM === 'darwin' ? '⌘' : 'Ctrl';
+
+  // Se aplica al momento a las terminales abiertas; si no se guarda, se deshace.
+  const change = async <K extends keyof TerminalAppearance>(field: K, value: TerminalAppearance[K]) => {
+    const previous = appearance;
+    const next = { ...appearance, [field]: value };
+    setAppearance(next);
+    setTerminalAppearance({ [field]: value });
+    try {
+      await call(window.api.settings.set(TERMINAL_KEYS[field], value as never));
+    } catch (err) {
+      setAppearance(previous);
+      setTerminalAppearance(previous);
+      toast(`No se pudo guardar: ${errorText(err)}`, 'error');
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <label className="vf-label">
+        <span className="flex items-center justify-between">
+          Tamaño de letra <span className="tabular-nums">{appearance.fontSize} px</span>
+        </span>
+        <input
+          type="range"
+          min={8}
+          max={32}
+          value={appearance.fontSize}
+          className="w-full accent-[var(--vela-accent)]"
+          onChange={(e) => void change('fontSize', Number(e.target.value))}
+        />
+      </label>
+      <label className="vf-label">
+        Tipo de letra
+        <input
+          className="vf-input font-mono"
+          value={family}
+          spellCheck={false}
+          onChange={(e) => setFamily(e.target.value)}
+          onBlur={() => {
+            const value = family.trim() || SETTING_DEFAULTS['terminal:font-family'];
+            setFamily(value);
+            if (value !== appearance.fontFamily) void change('fontFamily', value);
+          }}
+        />
+        <span className="text-[11px] text-[var(--vela-fg-muted)]">Lista CSS: se usa la primera fuente instalada en este equipo. No se sincroniza.</span>
+      </label>
+      <label className="vf-label">
+        Historial al desplazarse hacia arriba
+        <select className="vf-input" value={appearance.scrollback} onChange={(e) => void change('scrollback', Number(e.target.value))}>
+          {SCROLLBACK_OPTIONS.map((n) => (
+            <option key={n} value={n}>
+              {n.toLocaleString('es-ES')} líneas
+            </option>
+          ))}
+        </select>
+      </label>
+      <section className="flex flex-col gap-1 border-t border-[var(--vela-border)] pt-4 text-[11px] text-[var(--vela-fg-muted)]">
+        <h3 className="vf-panel-title">Teclado</h3>
+        <p>Con la terminal enfocada, las teclas son del servidor: Ctrl+C interrumpe, Ctrl+W borra una palabra, Ctrl+R busca en el historial.</p>
+        <p>
+          Siguen funcionando la paleta ({formatShortcut('Ctrl+Space', PLATFORM)}), cambiar de pestaña ({formatShortcut('Ctrl+Tab', PLATFORM)}), mostrar u ocultar la terminal (
+          {formatShortcut('Ctrl+`', PLATFORM)}) y abrir otra ({formatShortcut('Ctrl+Shift+`', PLATFORM)}).
+        </p>
+        <p>
+          Copiar: {mod}+Shift+C, o {mod}+C con texto seleccionado. Pegar: {mod}+Shift+V{PLATFORM === 'win32' ? ' o Ctrl+V' : ''}. Buscar: {mod}+Shift+F.
+        </p>
+      </section>
     </div>
   );
 }
@@ -472,6 +556,7 @@ export function SettingsDialog({ section = 'general', onClose }: { section?: Sec
         <div className="min-w-0 flex-1">
           {current === 'general' && <GeneralSection />}
           {current === 'appearance' && <AppearanceSection />}
+          {current === 'terminal' && <TerminalSection />}
           {current === 'shortcuts' && <ShortcutsSection />}
           {current === 'security' && <SecuritySection />}
           {current === 'sync' && <SyncSection />}
