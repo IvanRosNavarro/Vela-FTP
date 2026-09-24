@@ -7,7 +7,7 @@ import { attachShortcuts } from 'vela-kit/commands';
 import { logger } from 'vela-kit/logger';
 import { resolveTheme } from 'vela-kit/theme/themes';
 import { titleBarWindowOptions, watchMaximized, type DesktopPlatform } from 'vela-kit/window';
-import { suspendedShortcutWindows } from '../commands';
+import { shortcutPassesThrough, suspendedShortcutWindows, terminalFocusedWindows } from '../commands';
 import { DEV_SERVER_ORIGIN } from '../ipc/guard';
 import { APP_URL } from '../protocol/appProtocol';
 
@@ -107,14 +107,16 @@ export function createShellWindow(options: ShellWindowOptions): BrowserWindow {
   const getShortcuts = options.getShortcuts;
   const detachShortcuts = getShortcuts
     ? attachShortcuts(getShortcuts, win.webContents, () => (win.isDestroyed() ? null : win.id), {
-        // Mientras se captura un atajo en ajustes, las teclas llegan a la página.
-        passThrough: (_input, windowId) => suspendedShortcutWindows.has(windowId),
+        // Mientras se captura un atajo en ajustes o con una terminal enfocada,
+        // las teclas llegan a la página.
+        passThrough: (input, windowId) => shortcutPassesThrough(windowId, getShortcuts()?.match(input)?.source),
         onError: (source, err) => logger.warn(`[shortcuts] ${source} falló`, err),
       })
     : () => undefined;
   const windowId = win.id;
   win.on('closed', () => {
     suspendedShortcutWindows.delete(windowId);
+    terminalFocusedWindows.delete(windowId);
     stopWatching();
     detachShortcuts();
   });

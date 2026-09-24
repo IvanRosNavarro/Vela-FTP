@@ -38,6 +38,11 @@ export class SessionPool {
     return this.options.sessionId;
   }
 
+  /** Configuración con la que se abrió la sesión (la terminal abre su propia conexión con ella). */
+  get config(): ConnectionConfig {
+    return this.options.config;
+  }
+
   get maxTransferConnections(): number {
     return this.options.maxTransferConnections;
   }

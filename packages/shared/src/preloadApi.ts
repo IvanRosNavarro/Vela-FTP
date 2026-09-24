@@ -26,6 +26,7 @@ import type {
   WatchInfo,
 } from './schemas';
 import type { UpdateStatus } from './updates';
+import type { TerminalOutput } from './transfer/terminal';
 import type { ConflictDecision, JobSnapshot, RemoteEntry } from './transfer/types';
 
 export type Platform = 'win32' | 'darwin' | 'linux';
@@ -127,6 +128,29 @@ export interface SessionsApi {
   trust(input: TrustInput): Promise<AppResponse<null>>;
   knownHosts(): Promise<AppResponse<KnownHostInfo[]>>;
   forget(host: string, port: number, fingerprint: string): Promise<AppResponse<null>>;
+}
+
+/**
+ * Terminales SSH. La entrada y la salida van por un MessagePort directo con el
+ * motor que guarda el preload; el renderer solo ve estas funciones.
+ */
+export interface TerminalApi {
+  /** Abre una terminal sobre una sesión SFTP abierta. */
+  open(sessionId: string, cols: number, rows: number): Promise<AppResponse<{ terminalId: string }>>;
+  /**
+   * Recibe la salida de la terminal (un oyente por terminal). Lo que llegue
+   * antes de escuchar se guarda. Tras `exit` o `lost` la terminal ya no existe.
+   */
+  listen(terminalId: string, listener: (message: TerminalOutput) => void): () => void;
+  write(terminalId: string, data: string): void;
+  /** Secuencias binarias de xterm (informes del ratón). */
+  writeBinary(terminalId: string, data: string): void;
+  resize(terminalId: string, cols: number, rows: number): void;
+  close(terminalId: string): void;
+  /** Con una terminal enfocada, sus teclas no disparan los atajos de la app. */
+  setFocused(focused: boolean): Promise<AppResponse<null>>;
+  /** Abre un enlace http(s) en el navegador del sistema. */
+  openLink(url: string): Promise<AppResponse<null>>;
 }
 
 export interface RemoteApi {
@@ -237,6 +261,7 @@ export interface PreloadApi {
   import: ImportApi;
   vault: VaultApi;
   sessions: SessionsApi;
+  terminal: TerminalApi;
   remote: RemoteApi;
   local: LocalApi;
   queue: QueueApi;

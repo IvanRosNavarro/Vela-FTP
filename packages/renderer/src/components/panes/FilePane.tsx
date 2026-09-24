@@ -24,6 +24,7 @@ import {
   RefreshCw,
   Trash2,
   Upload,
+  SquareTerminal,
 } from 'lucide-react';
 import { List, useListRef, type RowComponentProps } from 'react-window';
 import type { LocalRoot, RemoteEntry } from '@vela-ftp/shared';
@@ -43,6 +44,7 @@ import { useUiStore } from '../../stores/uiStore';
 import { useSitesStore } from '../../stores/sitesStore';
 import { startWatch } from '../../stores/watchStore';
 import { addBookmarkFor } from '../../lib/bookmarks';
+import { openTerminal } from '../../lib/terminal/actions';
 import { useContextMenu, type MenuItem } from '../ContextMenu';
 import { PathInput } from './PathInput';
 
@@ -160,6 +162,8 @@ function Row({ index, style, ariaAttributes, entries, columns, grid, compare, se
 
 export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null }: FilePaneProps) {
   const isRemote = isRemotePane(paneKey);
+  // La terminal va por SSH: solo en el panel remoto de una sesión SFTP.
+  const canOpenTerminal = useSessionsStore((s) => isRemote && s.sessions.some((x) => x.sessionId === sessionId && x.protocol === 'sftp'));
   const pane = usePanesStore((s) => s.panes[paneKey]);
   const store = usePanesStore.getState;
   const ops: PathOps = isRemote ? remotePaths : localPaths(window.api.local.separator);
@@ -387,6 +391,9 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
     const canTransfer = sessionOfPane(paneKey) !== null;
     const menu: MenuItem[] = [
       ...(single?.type === 'dir' ? [{ label: 'Abrir', icon: <FolderInput size={13} />, shortcut: 'Intro', onSelect: () => navigate(single.path) }] : []),
+      ...(single?.type === 'dir' && canOpenTerminal
+        ? [{ label: 'Abrir terminal aquí', icon: <SquareTerminal size={13} />, onSelect: () => openTerminal(sessionId, single.path) }]
+        : []),
       {
         label: isRemote ? 'Descargar' : 'Subir',
         icon: isRemote ? <Download size={13} /> : <Upload size={13} />,
@@ -465,6 +472,7 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
     showMenu(e.clientX, e.clientY, [
       { label: 'Nueva carpeta', icon: <FolderPlus size={13} />, onSelect: () => void mkdir() },
       { label: 'Refrescar', icon: <RefreshCw size={13} />, shortcut: 'F5', onSelect: refresh },
+      ...(canOpenTerminal ? [{ label: 'Abrir terminal en esta carpeta', icon: <SquareTerminal size={13} />, onSelect: () => openTerminal(sessionId, pane.path) }] : []),
       { label: pane.showHidden ? 'Ocultar ficheros ocultos' : 'Mostrar ficheros ocultos', icon: pane.showHidden ? <EyeOff size={13} /> : <Eye size={13} />, onSelect: () => store().toggleHidden(paneKey) },
       ...(!isRemote && sessionOfPane(paneKey) && otherPane()
         ? [

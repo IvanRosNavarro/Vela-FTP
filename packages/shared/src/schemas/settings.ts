@@ -43,6 +43,12 @@ export const SETTING_SCHEMAS = {
   'ui:glassmorphism-intensity': z.number().int().min(0).max(100),
   /** Opacidad del cristal: 0 = casi transparente, 100 = casi sólido. */
   'ui:glassmorphism-opacity': z.number().int().min(0).max(100),
+  /** Tamaño de letra de la terminal en px. */
+  'terminal:font-size': z.number().int().min(8).max(32),
+  /** Familia de letra de la terminal (lista CSS); depende de las fuentes del equipo. */
+  'terminal:font-family': z.string().min(1).max(300),
+  /** Líneas que se conservan al desplazarse hacia arriba. */
+  'terminal:scrollback': z.number().int().min(500).max(100_000),
 } as const;
 
 export type SettingKey = keyof typeof SETTING_SCHEMAS;
@@ -67,6 +73,9 @@ export const SETTING_DEFAULTS: { [K in SettingKey]: SettingValue<K> } = {
   'ui:glassmorphism': false,
   'ui:glassmorphism-intensity': 60,
   'ui:glassmorphism-opacity': 60,
+  'terminal:font-size': 13,
+  'terminal:font-family': "'Cascadia Mono', Consolas, 'DejaVu Sans Mono', Menlo, monospace",
+  'terminal:scrollback': 5000,
 };
 
 const settingKeySchema = z.enum(Object.keys(SETTING_SCHEMAS) as [SettingKey, ...SettingKey[]]);

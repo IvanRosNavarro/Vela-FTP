@@ -1,6 +1,7 @@
 import {
   TRANSFER_REQUEST_SCHEMAS,
   type ConnectionConfig,
+  type LogLevel,
   type MainToTransferMessage,
   type TransferEventName,
   type TransferEvents,
@@ -13,6 +14,7 @@ import { TransferFailure, toFailure } from './errors';
 import { FtpFs } from './fs/FtpFs';
 import type { RemoteFs, RemoteFsFactory } from './fs/RemoteFs';
 import { SftpFs } from './fs/SftpFs';
+import { SshTerminal, type TerminalPort } from './terminal/SshTerminal';
 import { SessionPool, isBrokenConnection } from './pool';
 import { TransferQueue } from './queue';
 
@@ -20,7 +22,8 @@ export const defaultFactory: RemoteFsFactory = (config: ConnectionConfig, log) =
   config.protocol === 'sftp' ? new SftpFs(config, log) : new FtpFs(config, log);
 
 type Params<M extends TransferMethod> = z.output<(typeof TRANSFER_REQUEST_SCHEMAS)[M]>;
-type Handlers = { [M in TransferMethod]: (params: Params<M>) => Promise<TransferResults[M]> };
+/** `ports`: MessagePorts adjuntos al mensaje (solo los usa `terminal.open`). */
+type Handlers = { [M in TransferMethod]: (params: Params<M>, ports: TerminalPort[]) => Promise<TransferResults[M]> };
 
 export interface EngineOptions {
   send: (message: TransferToMainMessage) => void;
@@ -31,6 +34,8 @@ export interface EngineOptions {
 /** Motor de transferencias: sesiones, cola y despacho de mensajes de main. */
 export class TransferEngine {
   private readonly pools = new Map<string, SessionPool>();
+  private readonly terminals = new Map<string, SshTerminal>();
+  private terminalCounter = 0;
   readonly queue: TransferQueue;
   private readonly factory: RemoteFsFactory;
   private readonly handlers: Handlers;
@@ -88,6 +93,7 @@ export class TransferEngine {
       },
       'session.close': async ({ sessionId }) => {
         this.queue.interruptSession(sessionId);
+        this.closeTerminals(sessionId);
         this.pools.get(sessionId)?.close();
         this.pools.delete(sessionId);
         return null;
@@ -139,6 +145,32 @@ export class TransferEngine {
           await fs.upload(localPath, path, noProgress());
           return fs.stat(path);
         }),
+      'terminal.open': async ({ terminalId, sessionId, cols, rows }, ports) => {
+        const port = ports[0];
+        if (!port) throw new TransferFailure('PROTOCOL', 'terminal.open necesita un MessagePort');
+        let config: ConnectionConfig;
+        try {
+          config = pool(sessionId).config;
+          if (config.protocol !== 'sftp') throw new TransferFailure('PROTOCOL', 'La terminal solo está disponible en sitios SFTP');
+        } catch (err) {
+          port.close();
+          throw err;
+        }
+        const n = ++this.terminalCounter;
+        const log = (level: LogLevel, message: string) =>
+          this.emit('log', { sessionId, level, message: `[term#${n}] ${message}`, at: Date.now() });
+        const terminal = new SshTerminal(terminalId, sessionId, port, log, (t) => {
+          if (this.terminals.get(t.id) === t) this.terminals.delete(t.id);
+        });
+        this.terminals.set(terminalId, terminal);
+        try {
+          await terminal.open(config, cols, rows);
+        } catch (err) {
+          terminal.close();
+          throw err;
+        }
+        return null;
+      },
       'queue.enqueue': async ({ jobs }) => {
         this.queue.enqueue(jobs);
         return null;
@@ -166,22 +198,31 @@ export class TransferEngine {
     this.options.send({ kind: 'event', name, payload });
   }
 
+  private closeTerminals(sessionId: string): void {
+    for (const terminal of [...this.terminals.values()]) {
+      if (terminal.sessionId === sessionId) terminal.close();
+    }
+  }
+
   /** Ejecuta una petición ya validada. Público para los tests. */
-  async call<M extends TransferMethod>(method: M, params: unknown): Promise<TransferResults[M]> {
+  async call<M extends TransferMethod>(method: M, params: unknown, ports: TerminalPort[] = []): Promise<TransferResults[M]> {
     const schema = TRANSFER_REQUEST_SCHEMAS[method];
     if (!schema) throw new TransferFailure('PROTOCOL', `Método desconocido: ${String(method)}`);
     const parsed = schema.safeParse(params);
     if (!parsed.success) throw new TransferFailure('PROTOCOL', `Parámetros no válidos para ${method}: ${parsed.error.message}`);
-    const handler = this.handlers[method] as (p: unknown) => Promise<TransferResults[M]>;
-    return handler(parsed.data);
+    const handler = this.handlers[method] as (p: unknown, ports: TerminalPort[]) => Promise<TransferResults[M]>;
+    return handler(parsed.data, ports);
   }
 
   /** Punto de entrada de los mensajes de main. Nunca lanza. */
-  async handle(message: unknown): Promise<void> {
+  async handle(message: unknown, ports: TerminalPort[] = []): Promise<void> {
     const msg = message as Partial<MainToTransferMessage>;
-    if (msg?.kind !== 'request' || typeof msg.id !== 'number' || typeof msg.method !== 'string') return;
+    if (msg?.kind !== 'request' || typeof msg.id !== 'number' || typeof msg.method !== 'string') {
+      for (const port of ports) port.close();
+      return;
+    }
     try {
-      const data = await this.call(msg.method as TransferMethod, msg.params);
+      const data = await this.call(msg.method as TransferMethod, msg.params, ports);
       this.options.send({ kind: 'response', id: msg.id, ok: true, data });
     } catch (err) {
       this.options.send({ kind: 'response', id: msg.id, ok: false, error: toFailure(err).info });
@@ -190,6 +231,7 @@ export class TransferEngine {
 
   dispose(): void {
     this.queue.dispose();
+    for (const terminal of [...this.terminals.values()]) terminal.close();
     for (const p of this.pools.values()) p.close();
     this.pools.clear();
   }

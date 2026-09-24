@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { terminalSizeSchema } from './terminal';
 import type { ConflictInfo, JobSnapshot, ProtocolLogLine, RemoteEntry, TransferError } from './types';
 
 // Mensajes entre main y el utilityProcess de transferencias. main valida lo que
@@ -61,6 +62,16 @@ export const TRANSFER_REQUEST_SCHEMAS = {
     path: remotePath,
     expected: z.object({ size: z.number().int().min(0), modifiedAt: z.number().nullable() }).nullable(),
   }),
+  /**
+   * Abre una terminal SSH con la configuración de la sesión. Lleva adjunto el
+   * MessagePort por el que viajan la entrada y la salida (ver `terminal.ts`).
+   */
+  'terminal.open': z.object({
+    terminalId: z.string().min(1).max(100),
+    sessionId,
+    cols: terminalSizeSchema.shape.cols,
+    rows: terminalSizeSchema.shape.rows,
+  }),
   'queue.enqueue': z.object({ jobs: z.array(transferJobSchema).min(1).max(10_000) }),
   'queue.cancel': z.object({ jobIds: z.array(z.string()).max(10_000) }),
   'queue.retry': z.object({ jobIds: z.array(z.string()).max(10_000) }),
@@ -87,6 +98,7 @@ export interface TransferResults {
   'fs.realpath': string;
   'file.fetch': RemoteEntry;
   'file.store': RemoteEntry | null;
+  'terminal.open': null;
   'queue.enqueue': null;
   'queue.cancel': null;
   'queue.retry': null;

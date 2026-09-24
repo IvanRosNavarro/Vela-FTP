@@ -7,3 +7,4 @@ export * from './sites';
 export * from './sync';
 export * from './watch';
 export * from './window';
+export * from './terminal';

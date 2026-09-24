@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import path from 'node:path';
-import { utilityProcess, type UtilityProcess } from 'electron';
+import { utilityProcess, type MessagePortMain, type UtilityProcess } from 'electron';
 import type {
   TransferError,
   TransferEventName,
@@ -91,15 +91,17 @@ export class TransferHost {
     this.events.emit('host.restarted');
   }
 
-  request<M extends TransferMethod>(method: M, params: TransferParams<M>): Promise<TransferResults[M]> {
+  /** `ports`: MessagePorts que se transfieren al motor con la petición (terminal). */
+  request<M extends TransferMethod>(method: M, params: TransferParams<M>, ports: MessagePortMain[] = []): Promise<TransferResults[M]> {
     const child = this.child;
     if (!child) {
+      for (const port of ports) port.close();
       return Promise.reject(new TransferRequestError({ code: 'INTERNAL', message: 'El motor de transferencias no está en marcha' }));
     }
     const id = this.nextId++;
     return new Promise<TransferResults[M]>((resolve, reject) => {
       this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject, method });
-      child.postMessage({ kind: 'request', id, method, params });
+      child.postMessage({ kind: 'request', id, method, params }, ports);
     });
   }
 

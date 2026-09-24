@@ -9,7 +9,16 @@ import type { CommandCategory } from '@vela-ftp/shared';
 import { CommandRegistry } from 'vela-kit/commands';
 import { createTestDb } from '../test/createTestDb';
 import { SettingsRepository } from '../storage/repositories/SettingsRepository';
-import { PALETTE_SHORTCUT, ShortcutManager, buildCommandRegistry, defineCommand, type CommandContext } from './index';
+import {
+  PALETTE_SHORTCUT,
+  ShortcutManager,
+  buildCommandRegistry,
+  defineCommand,
+  shortcutPassesThrough,
+  suspendedShortcutWindows,
+  terminalFocusedWindows,
+  type CommandContext,
+} from './index';
 
 function setup() {
   const registry = new CommandRegistry<CommandContext, CommandCategory>();
@@ -90,5 +99,37 @@ describe('registro de comandos', () => {
     expect(command?.defaultShortcut).toBe('Ctrl+Shift+N');
     registry.execute('window.new', { windowId: null });
     expect(openWindow).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('atajos con una terminal enfocada', () => {
+  it('las teclas van al servidor salvo la paleta, cambiar de sesión y la propia terminal', () => {
+    terminalFocusedWindows.add(7);
+    try {
+      expect(shortcutPassesThrough(7, 'site.disconnect')).toBe(true); // Ctrl+W
+      expect(shortcutPassesThrough(7, 'view.refresh')).toBe(true); // Ctrl+R
+      expect(shortcutPassesThrough(7, 'app.commandPalette')).toBe(false);
+      expect(shortcutPassesThrough(7, 'navigation.nextSession')).toBe(false);
+      expect(shortcutPassesThrough(7, 'terminal.toggle')).toBe(false);
+      // En otra ventana los atajos siguen igual.
+      expect(shortcutPassesThrough(8, 'site.disconnect')).toBe(false);
+    } finally {
+      terminalFocusedWindows.delete(7);
+    }
+  });
+
+  it('capturando un atajo en ajustes pasa todo', () => {
+    suspendedShortcutWindows.add(9);
+    try {
+      expect(shortcutPassesThrough(9, 'app.commandPalette')).toBe(true);
+    } finally {
+      suspendedShortcutWindows.delete(9);
+    }
+  });
+
+  it('los comandos de la terminal tienen Ctrl+` y Ctrl+Shift+`', () => {
+    const registry = buildCommandRegistry(() => undefined);
+    expect(registry.get('terminal.toggle')?.defaultShortcut).toBe('Ctrl+`');
+    expect(registry.get('terminal.new')?.defaultShortcut).toBe('Ctrl+Shift+`');
   });
 });

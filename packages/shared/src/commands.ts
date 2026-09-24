@@ -6,13 +6,14 @@ import { z } from 'zod';
  */
 export const PALETTE_SHORTCUT = 'Ctrl+Space';
 
-export type CommandCategory = 'app' | 'site' | 'navigation' | 'transfer' | 'view' | 'window';
+export type CommandCategory = 'app' | 'site' | 'navigation' | 'transfer' | 'terminal' | 'view' | 'window';
 
 export const COMMAND_CATEGORY_LABELS: Record<CommandCategory, string> = {
   app: 'General',
   site: 'Sitios',
   navigation: 'Navegación',
   transfer: 'Transferencias',
+  terminal: 'Terminal',
   view: 'Vista',
   window: 'Ventana',
 };
@@ -36,7 +37,9 @@ export type CommandAction =
   | 'toggle-bottom-panel'
   | 'open-updates'
   | 'toggle-compare'
-  | 'toggle-sync-browsing';
+  | 'toggle-sync-browsing'
+  | 'toggle-terminal'
+  | 'new-terminal';
 
 export interface CommandInfo {
   id: string;

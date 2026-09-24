@@ -89,6 +89,7 @@ const LOCAL_ONLY_SETTINGS = new Set<string>([
   'ui:sidebar-collapsed',
   'ui:panes-ratio',
   'ui:bottom-panel-height',
+  'terminal:font-family',
   'updates:auto-check',
   'app:welcomed',
 ]);
