@@ -146,6 +146,10 @@ export interface TerminalApi {
   /** Secuencias binarias de xterm (informes del ratón). */
   writeBinary(terminalId: string, data: string): void;
   resize(terminalId: string, cols: number, rows: number): void;
+  /** Enciende o apaga el estado del servidor de esa terminal. */
+  setMonitor(terminalId: string, enabled: boolean): void;
+  /** Carpeta de la que medir el disco (la del panel remoto). */
+  setDiskPath(terminalId: string, path: string | null): void;
   close(terminalId: string): void;
   /** Con una terminal enfocada, sus teclas no disparan los atajos de la app. */
   setFocused(focused: boolean): Promise<AppResponse<null>>;

@@ -3,7 +3,7 @@ import { SearchAddon } from '@xterm/addon-search';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { Terminal, type ITheme } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
-import type { TerminalOutput } from '@vela-ftp/shared';
+import type { DiskUsage, ServerStats, TerminalOutput } from '@vela-ftp/shared';
 import { toast } from 'vela-kit/ui';
 import { confirmDialog } from '../../stores/dialogStore';
 import { useTerminalsStore, type TerminalStatus, type TerminalTab } from '../../stores/terminalsStore';
@@ -94,8 +94,9 @@ function watchTheme(): void {
   });
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class'] });
   themeObserver.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
-  onTerminalAppearance(({ fontSize, fontFamily, scrollback }) => {
+  onTerminalAppearance(({ fontSize, fontFamily, scrollback, serverStats }) => {
     for (const runtime of runtimes.values()) {
+      runtime.setMonitorEnabled(serverStats);
       runtime.term.options.fontSize = fontSize;
       runtime.term.options.fontFamily = fontFamily;
       runtime.term.options.scrollback = scrollback;
@@ -105,6 +106,17 @@ function watchTheme(): void {
 }
 
 const isMac = () => window.api.platform === 'darwin';
+
+/** Lo que pinta la barra de estado del servidor. */
+export interface ServerStatsView {
+  /** off = apagado o sin conexión; loading = esperando la primera muestra. */
+  state: 'off' | 'loading' | 'ok' | 'unavailable';
+  stats: ServerStats | null;
+  disk: DiskUsage | null;
+  reason: string | null;
+}
+
+const STATS_OFF: ServerStatsView = { state: 'off', stats: null, disk: null, reason: null };
 
 /** Silencio del servidor tras el que se da por pintado el prompt. */
 const PENDING_INPUT_QUIET_MS = 250;
@@ -131,6 +143,10 @@ export class TerminalRuntime {
   private pendingTimer: ReturnType<typeof setTimeout> | null = null;
   /** Lo pone la vista: Ctrl+Shift+F abre su buscador. */
   onSearchRequest: (() => void) | null = null;
+  private monitorWanted = getTerminalAppearance().serverStats;
+  private diskPath: string | null = null;
+  private statsView: ServerStatsView = STATS_OFF;
+  private readonly statsListeners = new Set<() => void>();
 
   constructor(
     readonly id: string,
@@ -197,6 +213,35 @@ export class TerminalRuntime {
     this.term.focus();
   }
 
+  // ── Estado del servidor (useSyncExternalStore) ─────────────────────────
+  subscribeStats = (listener: () => void): (() => void) => {
+    this.statsListeners.add(listener);
+    return () => this.statsListeners.delete(listener);
+  };
+
+  getStatsView = (): ServerStatsView => this.statsView;
+
+  private setStatsView(patch: Partial<ServerStatsView>): void {
+    this.statsView = { ...this.statsView, ...patch };
+    for (const listener of this.statsListeners) listener();
+  }
+
+  setMonitorEnabled(enabled: boolean): void {
+    if (this.monitorWanted === enabled) return;
+    this.monitorWanted = enabled;
+    if (!this.backendId) return;
+    window.api.terminal.setMonitor(this.backendId, enabled);
+    this.statsView = STATS_OFF;
+    this.setStatsView(enabled ? { state: 'loading' } : {});
+  }
+
+  /** Carpeta del panel remoto: el disco que se mide es el suyo. */
+  setDiskPath(path: string | null): void {
+    if (this.diskPath === path) return;
+    this.diskPath = path;
+    if (this.backendId) window.api.terminal.setDiskPath(this.backendId, path);
+  }
+
   get isOpen(): boolean {
     return this.backendId !== null;
   }
@@ -249,6 +294,12 @@ export class TerminalRuntime {
       this.backendId = terminalId;
       this.setStatus('open');
       this.unlisten = window.api.terminal.listen(terminalId, (message) => this.onOutput(message));
+      window.api.terminal.setDiskPath(terminalId, this.diskPath);
+      if (this.monitorWanted) {
+        window.api.terminal.setMonitor(terminalId, true);
+        this.statsView = STATS_OFF;
+        this.setStatsView({ state: 'loading' });
+      }
     } catch (err) {
       this.term.write(`\x1b[31mNo se pudo abrir la terminal: ${errorText(err)}\x1b[0m\r\n\x1b[2mIntro para reintentar\x1b[0m\r\n`);
       this.setStatus('closed');
@@ -258,10 +309,20 @@ export class TerminalRuntime {
   }
 
   private onOutput(message: TerminalOutput): void {
-    if (message.t === 'data') {
-      this.term.write(message.data);
-      if (this.pendingInput) this.schedulePendingInput();
-      return;
+    switch (message.t) {
+      case 'data':
+        this.term.write(message.data);
+        if (this.pendingInput) this.schedulePendingInput();
+        return;
+      case 'stats':
+        this.setStatsView({ state: 'ok', stats: message.stats });
+        return;
+      case 'disk':
+        this.setStatsView({ disk: message.disk });
+        return;
+      case 'stats-unavailable':
+        this.setStatsView({ state: 'unavailable', reason: message.reason });
+        return;
     }
     this.release();
     const reason = message.t === 'exit' ? 'Sesión terminada' : message.message;
@@ -369,6 +430,10 @@ export class TerminalRuntime {
     this.unlisten = null;
     if (this.backendId) window.api.terminal.close(this.backendId);
     this.backendId = null;
+    if (this.statsView !== STATS_OFF) {
+      this.statsView = STATS_OFF;
+      for (const listener of this.statsListeners) listener();
+    }
   }
 
   dispose(): void {

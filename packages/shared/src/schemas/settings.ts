@@ -49,6 +49,8 @@ export const SETTING_SCHEMAS = {
   'terminal:font-family': z.string().min(1).max(300),
   /** Líneas que se conservan al desplazarse hacia arriba. */
   'terminal:scrollback': z.number().int().min(500).max(100_000),
+  /** Barra con el estado del servidor (CPU, RAM, disco, red) bajo cada terminal. */
+  'terminal:server-stats': z.boolean(),
 } as const;
 
 export type SettingKey = keyof typeof SETTING_SCHEMAS;
@@ -76,6 +78,7 @@ export const SETTING_DEFAULTS: { [K in SettingKey]: SettingValue<K> } = {
   'terminal:font-size': 13,
   'terminal:font-family': "'Cascadia Mono', Consolas, 'DejaVu Sans Mono', Menlo, monospace",
   'terminal:scrollback': 5000,
+  'terminal:server-stats': true,
 };
 
 const settingKeySchema = z.enum(Object.keys(SETTING_SCHEMAS) as [SettingKey, ...SettingKey[]]);

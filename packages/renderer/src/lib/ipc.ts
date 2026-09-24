@@ -49,12 +49,16 @@ const MESSAGES: Partial<Record<AppErrorCode, string>> = {
   INTERNAL: 'Error interno',
 };
 
+/** Un mensaje de error técnico no debe comerse el toast. */
+const MAX_DETAIL = 200;
+
 export function describeError(code: AppErrorCode, details?: unknown): string {
   const base = MESSAGES[code] ?? code;
   const serverMessage = (details as { message?: unknown } | undefined)?.message;
-  return typeof serverMessage === 'string' && serverMessage && !['INVALID_INPUT', 'INTERNAL'].includes(code)
-    ? `${base}: ${serverMessage}`
-    : base;
+  if (typeof serverMessage !== 'string' || !serverMessage || code === 'INVALID_INPUT') return base;
+  const detail = serverMessage.length > MAX_DETAIL ? `${serverMessage.slice(0, MAX_DETAIL)}…` : serverMessage;
+  // El motor redacta los PROTOCOL para el usuario: «Respuesta inesperada» delante sobra.
+  return code === 'PROTOCOL' ? detail : `${base}: ${detail}`;
 }
 
 export function errorText(err: unknown): string {

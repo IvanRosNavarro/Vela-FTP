@@ -213,10 +213,11 @@ function AppearanceSection() {
 }
 
 const SCROLLBACK_OPTIONS = [1000, 5000, 10_000, 50_000, 100_000];
-const TERMINAL_KEYS: Record<keyof TerminalAppearance, 'terminal:font-size' | 'terminal:font-family' | 'terminal:scrollback'> = {
+const TERMINAL_KEYS: Record<keyof TerminalAppearance, 'terminal:font-size' | 'terminal:font-family' | 'terminal:scrollback' | 'terminal:server-stats'> = {
   fontSize: 'terminal:font-size',
   fontFamily: 'terminal:font-family',
   scrollback: 'terminal:scrollback',
+  serverStats: 'terminal:server-stats',
 };
 
 function TerminalSection() {
@@ -279,6 +280,16 @@ function TerminalSection() {
           ))}
         </select>
       </label>
+      <section className="flex flex-col gap-2 border-t border-[var(--vela-border)] pt-4">
+        <h3 className="vf-panel-title">Estado del servidor</h3>
+        <label className="flex items-center gap-2 text-xs">
+          <input type="checkbox" checked={appearance.serverStats} onChange={(e) => void change('serverStats', e.target.checked)} />
+          Mostrar CPU, RAM, disco, red, carga y tiempo encendido bajo cada terminal
+        </label>
+        <p className="text-[11px] text-[var(--vela-fg-muted)]">
+          Se lee de /proc una vez por segundo por un canal aparte de la misma conexión, sin instalar nada en el servidor. Solo en servidores Linux.
+        </p>
+      </section>
       <section className="flex flex-col gap-1 border-t border-[var(--vela-border)] pt-4 text-[11px] text-[var(--vela-fg-muted)]">
         <h3 className="vf-panel-title">Teclado</h3>
         <p>Con la terminal enfocada, las teclas son del servidor: Ctrl+C interrumpe, Ctrl+W borra una palabra, Ctrl+R busca en el historial.</p>

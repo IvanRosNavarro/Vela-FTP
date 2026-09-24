@@ -230,3 +230,31 @@ describe('SFTP: clave de host', () => {
     }
   });
 });
+
+describe('SFTP: usuario sin acceso SSH', () => {
+  it('autenticado pero sin subsistema sftp da un error claro y lo deja en el registro', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'vela-nosftp-'));
+    const srv = await startSftpServer(root, USER, PASS);
+    srv.noSftp = true;
+    const log: string[] = [];
+    const config: ConnectionConfig = {
+      protocol: 'sftp',
+      host: '127.0.0.1',
+      port: srv.port,
+      username: USER,
+      auth: 'password',
+      password: PASS,
+      trustedFingerprints: [srv.fingerprint],
+      timeoutMs: 5000,
+    };
+    try {
+      const err = await new SftpFs(config, (_level, message) => log.push(message)).connect().catch((e: TransferFailure) => e);
+      expect(err).toMatchObject({ code: 'PROTOCOL' });
+      expect((err as TransferFailure).message).toContain('no le deja usar SFTP');
+      expect(log.some((l) => l.startsWith('No se pudo abrir SFTP:'))).toBe(true);
+    } finally {
+      await srv.close();
+      await removeDir(root);
+    }
+  });
+});

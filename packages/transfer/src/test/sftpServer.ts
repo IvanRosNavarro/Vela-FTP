@@ -5,6 +5,7 @@ import type { AddressInfo } from 'node:net';
 import path from 'node:path';
 import { Server, utils, type Attributes } from 'ssh2';
 import { hostKeyFingerprint } from '../fs/SftpFs';
+import { STATS_COMMAND } from '../terminal/serverStats';
 
 const { STATUS_CODE, flagsToString } = utils.sftp;
 
@@ -16,6 +17,12 @@ export interface TestSftpServer {
   fingerprint: string;
   /** Tamaños de pty pedidos (al abrir y en cada `window-change`). */
   ptySizes: Array<{ cols: number; rows: number; term?: string }>;
+  /** Órdenes recibidas por `exec`. */
+  execs: string[];
+  /** true = responde al bucle de estado como un servidor sin /proc. */
+  noProc: boolean;
+  /** true = autentica pero rechaza el subsistema sftp (usuario sin acceso SSH). */
+  noSftp: boolean;
   close(): Promise<void>;
 }
 
@@ -52,6 +59,8 @@ export async function startSftpServer(root: string, user: string, pass: string):
   const clients = new Set<{ end(): void }>();
   const modes: Modes = new Map();
   const ptySizes: TestSftpServer['ptySizes'] = [];
+  const execs: string[] = [];
+  const state = { noProc: false, noSftp: false };
 
   const server = new Server({ hostKeys: [keys.private] }, (client) => {
     clients.add(client);
@@ -74,6 +83,38 @@ export async function startSftpServer(root: string, user: string, pass: string):
           ptySizes.push({ cols: info.cols, rows: info.rows });
           accept?.();
         });
+        // `exec` de juguete: el bucle de estado envía una muestra cada 50 ms y `df` responde fijo.
+        session.on('exec', (accept, _reject, info) => {
+          const channel = accept();
+          execs.push(info.command);
+          if (info.command === STATS_COMMAND) {
+            if (state.noProc) {
+              channel.write('@@X\n');
+              channel.exit(0);
+              channel.end();
+              return;
+            }
+            channel.write('@@N 2\n');
+            let ticks = 0;
+            const timer = setInterval(() => {
+              ticks += 100;
+              const cpu = `cpu  ${ticks / 2} 0 0 ${ticks / 2} 0 0 0 0 0 0`;
+              const net = `I eth0: ${ticks} 0 0 0 0 0 0 0 ${ticks} 0 0 0 0 0 0 0`;
+              const lines = ['@@S', cpu, 'MemTotal: 1000', 'MemAvailable: 400', 'SwapTotal: 0', 'SwapFree: 0', 'L 0.5 0.4 0.3 1/1 1', 'U 3600.5 1.0', net, '@@E', ''];
+              channel.write(lines.join('\n'));
+            }, 50);
+            channel.on('close', () => clearInterval(timer));
+            return;
+          }
+          if (info.command.startsWith("sh -c 'LC_ALL=C df")) {
+            channel.write(['Filesystem 1024-blocks Used Available Capacity Mounted on', '/dev/vda1 2000 500 1500 25% /', ''].join('\n'));
+            channel.exit(0);
+            channel.end();
+            return;
+          }
+          channel.exit(127);
+          channel.end();
+        });
         session.on('shell', (accept) => {
           const channel = accept();
           channel.write('bienvenido\r\n$ ');
@@ -93,7 +134,11 @@ export async function startSftpServer(root: string, user: string, pass: string):
             }
           });
         });
-        session.on('sftp', (acceptSftp) => {
+        session.on('sftp', (acceptSftp, rejectSftp) => {
+          if (state.noSftp) {
+            rejectSftp();
+            return;
+          }
           const sftp = acceptSftp();
           const handles = new Map<number, { fd?: number; path?: string; dir?: string; listed?: boolean }>();
           let nextHandle = 1;
@@ -206,6 +251,19 @@ export async function startSftpServer(root: string, user: string, pass: string):
     modes,
     fingerprint,
     ptySizes,
+    execs,
+    get noProc() {
+      return state.noProc;
+    },
+    set noProc(value: boolean) {
+      state.noProc = value;
+    },
+    get noSftp() {
+      return state.noSftp;
+    },
+    set noSftp(value: boolean) {
+      state.noSftp = value;
+    },
     close: () =>
       new Promise<void>((resolve) => {
         for (const c of clients) c.end();
