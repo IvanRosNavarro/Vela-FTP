@@ -14,6 +14,7 @@ import { useContextMenu } from '../ContextMenu';
 import { openTerminal } from '../../lib/terminal/actions';
 import { useTerminalsStore } from '../../stores/terminalsStore';
 import { StatusDot, TerminalActions } from '../terminal/TerminalChrome';
+import { ArchiveOps } from './ArchiveOps';
 
 // xterm solo se descarga al abrir la primera terminal.
 const TerminalPane = lazy(() => import('../terminal/TerminalPane'));
@@ -333,6 +334,7 @@ export function BottomPanel({ height }: { height: number }) {
         </div>
         )}
       </div>
+      <ArchiveOps />
       <div className={terminal ? 'flex min-h-0 flex-1 flex-col' : 'min-h-0 flex-1'} role="tabpanel">
         {terminal ? (
           <Suspense fallback={null}>

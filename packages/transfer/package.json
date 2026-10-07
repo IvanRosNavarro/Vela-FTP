@@ -12,11 +12,15 @@
     "clean": "rimraf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@vela-ftp/shared": "workspace:*"
+    "@vela-ftp/shared": "workspace:*",
+    "yauzl": "3.4.0",
+    "yazl": "3.3.1"
   },
   "devDependencies": {
     "@types/node": "22.10.0",
     "@types/ssh2": "1.15.5",
+    "@types/yauzl": "3.4.0",
+    "@types/yazl": "3.3.1",
     "electron": "42.11.4",
     "rimraf": "5.0.7",
     "typescript": "5.4.5",

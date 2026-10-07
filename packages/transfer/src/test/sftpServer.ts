@@ -23,6 +23,14 @@ export interface TestSftpServer {
   noProc: boolean;
   /** true = autentica pero rechaza el subsistema sftp (usuario sin acceso SSH). */
   noSftp: boolean;
+  /**
+   * Programas que el servidor dice tener para extraer y comprimir (`command -v`).
+   * Con alguno, cualquier otra orden `sh -c` termina con `fakeExit` y `fakeStderr`
+   * sin hacer nada: basta para probar la ruta por SSH.
+   */
+  fakeTools: string[];
+  fakeExit: number;
+  fakeStderr: string;
   close(): Promise<void>;
 }
 
@@ -60,7 +68,7 @@ export async function startSftpServer(root: string, user: string, pass: string):
   const modes: Modes = new Map();
   const ptySizes: TestSftpServer['ptySizes'] = [];
   const execs: string[] = [];
-  const state = { noProc: false, noSftp: false };
+  const state = { noProc: false, noSftp: false, fakeTools: [] as string[], fakeExit: 0, fakeStderr: '' };
 
   const server = new Server({ hostKeys: [keys.private] }, (client) => {
     clients.add(client);
@@ -109,6 +117,18 @@ export async function startSftpServer(root: string, user: string, pass: string):
           if (info.command.startsWith("sh -c 'LC_ALL=C df")) {
             channel.write(['Filesystem 1024-blocks Used Available Capacity Mounted on', '/dev/vda1 2000 500 1500 25% /', ''].join('\n'));
             channel.exit(0);
+            channel.end();
+            return;
+          }
+          const tool = /^sh -c 'command -v "\$0" >\/dev\/null 2>&1' '([^']+)'$/.exec(info.command)?.[1];
+          if (tool !== undefined) {
+            channel.exit(state.fakeTools.includes(tool) ? 0 : 1);
+            channel.end();
+            return;
+          }
+          if (state.fakeTools.length > 0 && info.command.startsWith("sh -c '")) {
+            if (state.fakeStderr) channel.stderr.write(state.fakeStderr);
+            channel.exit(state.fakeExit);
             channel.end();
             return;
           }
@@ -263,6 +283,24 @@ export async function startSftpServer(root: string, user: string, pass: string):
     },
     set noSftp(value: boolean) {
       state.noSftp = value;
+    },
+    get fakeTools() {
+      return state.fakeTools;
+    },
+    set fakeTools(value: string[]) {
+      state.fakeTools = value;
+    },
+    get fakeExit() {
+      return state.fakeExit;
+    },
+    set fakeExit(value: number) {
+      state.fakeExit = value;
+    },
+    get fakeStderr() {
+      return state.fakeStderr;
+    },
+    set fakeStderr(value: string) {
+      state.fakeStderr = value;
     },
     close: () =>
       new Promise<void>((resolve) => {

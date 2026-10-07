@@ -7,6 +7,8 @@ import {
   Copy,
   Download,
   Eye,
+  FileArchive,
+  PackageOpen,
   EyeOff,
   FileCode,
   GitCompareArrows,
@@ -27,7 +29,7 @@ import {
   SquareTerminal,
 } from 'lucide-react';
 import { List, useListRef, type RowComponentProps } from 'react-window';
-import type { LocalRoot, RemoteEntry } from '@vela-ftp/shared';
+import { archiveFormatOf, archiveStem, type LocalRoot, type RemoteEntry } from '@vela-ftp/shared';
 import { toast } from 'vela-kit/ui';
 import type { CompareStatus } from '../../lib/compare';
 import { formatSize } from '../../lib/format';
@@ -36,6 +38,7 @@ import { EXPORT_MODIFIER_LABEL, wantsExport } from '../../lib/gestures';
 import { call, errorText } from '../../lib/ipc';
 import { isValidName, localPaths, remotePaths, type PathOps } from '../../lib/paths';
 import { downloadEntries, uploadDroppedFiles, uploadEntries } from '../../lib/transfers';
+import { compressEntries, defaultZipName, extractArchive, uniqueName } from '../../lib/archives';
 import { writeClipboardText } from '../../lib/clipboard';
 import { confirmDialog, promptDialog, useDialogStore } from '../../stores/dialogStore';
 import { isRemotePane, localPaneKey, remotePaneKey, sessionOfPane, sortEntries, usePanesStore, type PaneKey, type SortKey } from '../../stores/panesStore';
@@ -378,6 +381,39 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
     await store().refresh(paneKey);
   };
 
+  /** Extraer y comprimir: atajos directos en un submenú y el diálogo con todas las opciones. */
+  const archiveMenu = (items: RemoteEntry[], single: RemoteEntry | null): MenuItem[] => {
+    const menu: MenuItem[] = [];
+    const format = single && single.type !== 'dir' ? archiveFormatOf(single.name) : null;
+    if (single && format) {
+      const stem = archiveStem(single.name);
+      const extract = (targetDir: string) => void extractArchive({ sourcePane: paneKey, entry: single, targetPane: paneKey, targetDir, conflict: 'skip' });
+      menu.push({
+        kind: 'submenu',
+        label: 'Extraer',
+        icon: <PackageOpen size={13} />,
+        items: [
+          { label: 'Extraer aquí', onSelect: () => extract(pane.path) },
+          // Un .gz suelto es un solo fichero: una carpeta para él sobra.
+          ...(format !== 'gz' ? [{ label: `Extraer en «${stem}${isRemote ? '/' : window.api.local.separator}»`, onSelect: () => extract(ops.join(pane.path, stem)) }] : []),
+          { kind: 'separator' },
+          { label: 'Extraer en…', onSelect: () => useDialogStore.getState().open({ kind: 'extract', paneKey, entry: single }) },
+        ],
+      });
+    }
+    const zipName = uniqueName(defaultZipName(items, ops.basename(pane.path)), new Set(pane.entries.map((e) => e.name)));
+    menu.push({
+      kind: 'submenu',
+      label: 'Comprimir',
+      icon: <FileArchive size={13} />,
+      items: [
+        { label: `Comprimir en «${zipName}»`, onSelect: () => void compressEntries({ sourcePane: paneKey, entries: items, targetPane: paneKey, zipPath: ops.join(pane.path, zipName) }) },
+        { label: 'Comprimir en ZIP…', onSelect: () => useDialogStore.getState().open({ kind: 'compress', paneKey, entries: items }) },
+      ],
+    });
+    return menu;
+  };
+
   const copyPaths = (items: RemoteEntry[]) => {
     writeClipboardText(items.map((i) => i.path).join('\n'));
     toast(items.length === 1 ? 'Ruta copiada' : `${items.length} rutas copiadas`, 'success');
@@ -447,6 +483,8 @@ export function FilePane({ paneKey, sessionId, focused, onFocus, compare = null 
             { label: 'Mostrar en el explorador', icon: <FolderInput size={13} />, onSelect: () => void call(window.api.local.reveal(single.path)) },
           ]
         : []),
+      { kind: 'separator' },
+      ...archiveMenu(items, single),
       { kind: 'separator' },
       { label: 'Renombrar', icon: <Pencil size={13} />, shortcut: 'F2', disabled: !single, onSelect: () => single && void rename(single) },
       ...(isRemote && single

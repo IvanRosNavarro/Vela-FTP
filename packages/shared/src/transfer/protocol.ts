@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { archiveCompressInputSchema, archiveExtractInputSchema, type ArchiveProgress, type ArchiveResult } from './archive';
 import { terminalSizeSchema } from './terminal';
 import type { ConflictInfo, JobSnapshot, ProtocolLogLine, RemoteEntry, TransferError } from './types';
 
@@ -72,6 +73,14 @@ export const TRANSFER_REQUEST_SCHEMAS = {
     cols: terminalSizeSchema.shape.cols,
     rows: terminalSizeSchema.shape.rows,
   }),
+  /**
+   * Extrae un archivo comprimido. `workDir` es una carpeta temporal vacía de
+   * main para lo que haya que bajar o subir; la borra main al terminar.
+   */
+  'archive.extract': archiveExtractInputSchema.extend({ workDir: localPath }),
+  /** Crea un .zip con los ficheros y carpetas indicados. */
+  'archive.compress': archiveCompressInputSchema.extend({ workDir: localPath }),
+  'archive.cancel': z.object({ opId: z.string().min(1).max(100) }),
   'queue.enqueue': z.object({ jobs: z.array(transferJobSchema).min(1).max(10_000) }),
   'queue.cancel': z.object({ jobIds: z.array(z.string()).max(10_000) }),
   'queue.retry': z.object({ jobIds: z.array(z.string()).max(10_000) }),
@@ -99,6 +108,9 @@ export interface TransferResults {
   'file.fetch': RemoteEntry;
   'file.store': RemoteEntry | null;
   'terminal.open': null;
+  'archive.extract': ArchiveResult;
+  'archive.compress': ArchiveResult;
+  'archive.cancel': null;
   'queue.enqueue': null;
   'queue.cancel': null;
   'queue.retry': null;
@@ -113,6 +125,7 @@ export interface TransferEvents {
   log: ProtocolLogLine;
   /** La conexión de navegación se cerró sin pedirlo (caída, timeout del servidor). */
   'session.lost': { sessionId: string; error: TransferError };
+  'archive.progress': ArchiveProgress;
 }
 
 export type TransferEventName = keyof TransferEvents;

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import type { ConflictInfo, Site } from '@vela-ftp/shared';
+import type { ConflictInfo, RemoteEntry, Site } from '@vela-ftp/shared';
+import type { PaneKey } from './panesStore';
 
 export type PreviewSource = { kind: 'remote'; sessionId: string; path: string } | { kind: 'local'; path: string };
 
@@ -23,7 +24,9 @@ export type DialogSpec =
   | { kind: 'unlock'; resolve: (unlocked: boolean) => void }
   | { kind: 'masterPassword' }
   | { kind: 'conflict'; info: ConflictInfo }
-  | { kind: 'chmod'; sessionId: string; path: string; mode: number | null };
+  | { kind: 'chmod'; sessionId: string; path: string; mode: number | null }
+  | { kind: 'extract'; paneKey: PaneKey; entry: RemoteEntry }
+  | { kind: 'compress'; paneKey: PaneKey; entries: RemoteEntry[] };
 
 type WithoutResolve<T> = T extends { resolve: unknown } ? Omit<T, 'resolve'> : T;
 

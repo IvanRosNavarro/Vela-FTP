@@ -5,6 +5,7 @@ import type { UpdateStatus } from './updates';
 import type { WatchInfo } from './schemas/watch';
 import type { SyncStatus } from './schemas/sync';
 import type { ExternalFileEvent } from './schemas/editor';
+import type { ArchiveProgress } from './transfer/archive';
 import type { ConflictInfo, JobSnapshot, ProtocolLogLine, TransferError, TransferErrorCode } from './transfer/types';
 
 export const IPC_CHANNELS = {
@@ -77,6 +78,10 @@ export const IPC_CHANNELS = {
   LOCAL_START_DRAG: 'local:start-drag',
   LOCAL_COPY_INTO: 'local:copy-into',
 
+  ARCHIVE_EXTRACT: 'archive:extract',
+  ARCHIVE_COMPRESS: 'archive:compress',
+  ARCHIVE_CANCEL: 'archive:cancel',
+
   QUEUE_ENQUEUE: 'queue:enqueue',
   QUEUE_CANCEL: 'queue:cancel',
   QUEUE_RETRY: 'queue:retry',
@@ -141,6 +146,8 @@ export const IPC_EVENTS = {
   EXTERNAL_FILE: 'state:external-file',
   /** La sincronización ha traído datos nuevos: el renderer recarga sitios y marcadores. */
   SYNC_DATA_CHANGED: 'state:sync-data-changed',
+  /** Avance de una extracción o compresión. */
+  ARCHIVE_PROGRESS: 'state:archive-progress',
 } as const;
 
 /**
@@ -169,6 +176,7 @@ export interface MainEventPayloads {
   [IPC_EVENTS.SYNC_CHANGED]: SyncStatus;
   [IPC_EVENTS.EXTERNAL_FILE]: ExternalFileEvent;
   [IPC_EVENTS.SYNC_DATA_CHANGED]: null;
+  [IPC_EVENTS.ARCHIVE_PROGRESS]: ArchiveProgress;
 }
 
 /** Códigos de error que el renderer puede recibir en un `IpcResponse`. */

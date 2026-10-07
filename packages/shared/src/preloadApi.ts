@@ -28,6 +28,7 @@ import type {
 import type { UpdateStatus } from './updates';
 import type { TerminalOutput } from './transfer/terminal';
 import type { ConflictDecision, JobSnapshot, RemoteEntry } from './transfer/types';
+import type { ArchiveCompressInput, ArchiveExtractInput, ArchiveResult } from './transfer/archive';
 
 export type Platform = 'win32' | 'darwin' | 'linux';
 
@@ -195,6 +196,14 @@ export interface QueueApi {
   resume(sessionId: string, jobIds: string[]): Promise<AppResponse<string[]>>;
 }
 
+export interface ArchiveApi {
+  /** Extrae un .zip, .tar, .tar.gz/.tgz o .gz. Termina cuando acaba; el avance llega por `state:archive-progress`. */
+  extract(input: ArchiveExtractInput): Promise<AppResponse<ArchiveResult>>;
+  /** Crea un .zip con ficheros y carpetas de una misma carpeta. */
+  compress(input: ArchiveCompressInput): Promise<AppResponse<ArchiveResult>>;
+  cancel(opId: string): Promise<AppResponse<null>>;
+}
+
 export interface DialogApi {
   /** Ruta elegida o null si se cancela. */
   open(options: { title: string; directory: boolean }): Promise<AppResponse<string | null>>;
@@ -269,6 +278,7 @@ export interface PreloadApi {
   remote: RemoteApi;
   local: LocalApi;
   queue: QueueApi;
+  archive: ArchiveApi;
   dialog: DialogApi;
   updates: UpdatesApi;
   files: FilesApi;
