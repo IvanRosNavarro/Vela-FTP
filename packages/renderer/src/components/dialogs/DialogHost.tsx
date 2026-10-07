@@ -1,5 +1,6 @@
 import { useDialogStore } from '../../stores/dialogStore';
 import { useQueueStore } from '../../stores/queueStore';
+import { CompressDialog, ExtractDialog } from './ArchiveDialogs';
 import { ImportFileZillaDialog } from './ImportFileZillaDialog';
 import { PaletteHost } from './PaletteHost';
 import { PreviewDialog } from './PreviewDialog';
@@ -45,6 +46,10 @@ export function DialogHost() {
         return <MasterPasswordDialog onClose={onClose} />;
       case 'chmod':
         return <ChmodDialog spec={top} onClose={onClose} />;
+      case 'extract':
+        return <ExtractDialog spec={top} onClose={onClose} />;
+      case 'compress':
+        return <CompressDialog spec={top} onClose={onClose} />;
       case 'conflict':
         return null;
     }

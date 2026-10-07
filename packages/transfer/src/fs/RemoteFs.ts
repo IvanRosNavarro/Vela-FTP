@@ -10,6 +10,13 @@ export interface StreamOptions {
 
 export type LogSink = (level: LogLevel, message: string) => void;
 
+export interface ExecResult {
+  /** null si el servidor no dio código de salida (proceso matado por señal). */
+  code: number | null;
+  stdout: string;
+  stderr: string;
+}
+
 /**
  * Operaciones sobre un servidor remoto. Una instancia es una conexión: no
  * admite operaciones concurrentes (el pool se encarga de serializarlas).
@@ -34,6 +41,11 @@ export interface RemoteFs {
   realpath(path: string): Promise<string>;
   download(remotePath: string, localPath: string, options: StreamOptions): Promise<void>;
   upload(localPath: string, remotePath: string, options: StreamOptions): Promise<void>;
+  /**
+   * Ejecuta una orden en el servidor por un canal `exec` de la misma conexión.
+   * Solo SSH; falla si el servidor no deja ejecutar órdenes.
+   */
+  exec?(command: string, signal: AbortSignal): Promise<ExecResult>;
   /** Se llama una vez si la conexión se cae sin haber llamado a close(). */
   onLost(listener: (error: Error) => void): void;
   close(): void;

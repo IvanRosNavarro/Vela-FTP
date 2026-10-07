@@ -181,6 +181,12 @@ const api: PreloadApi = {
     resume: (sessionId, jobIds) => invoke(C.QUEUE_RESUME, { sessionId, jobIds }),
   },
 
+  archive: {
+    extract: (input) => invoke(C.ARCHIVE_EXTRACT, input),
+    compress: (input) => invoke(C.ARCHIVE_COMPRESS, input),
+    cancel: (opId) => invoke(C.ARCHIVE_CANCEL, { opId }),
+  },
+
   dialog: {
     open: (options) => invoke(C.DIALOG_OPEN, options),
   },

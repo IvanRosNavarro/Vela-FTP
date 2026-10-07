@@ -4,7 +4,7 @@ import { pipeline } from 'node:stream/promises';
 import type { Client, FileEntryWithStats, SFTPWrapper, Stats } from 'ssh2';
 import type { ConnectionConfig, RemoteEntry } from '@vela-ftp/shared';
 import { TransferFailure, isLocalFsError, localFailure } from '../errors';
-import { basenameRemote, joinRemote, type LogSink, type RemoteFs, type StreamOptions } from './RemoteFs';
+import { basenameRemote, joinRemote, type ExecResult, type LogSink, type RemoteFs, type StreamOptions } from './RemoteFs';
 import { connectSsh, mapSshError } from './sshConnect';
 
 export { hostKeyFingerprint } from './sshConnect';
@@ -68,6 +68,9 @@ function promisify<T>(fn: (cb: (err: Error | null | undefined, value: T) => void
     fn((err, value) => (err ? reject(err) : resolve(value)));
   });
 }
+
+/** Lo que se guarda de la salida de una orden: basta para el mensaje de error. */
+const EXEC_OUTPUT_MAX = 64 * 1024;
 
 /** Permisos de un fichero subido que no existía. */
 export const NEW_FILE_MODE = 0o644;
@@ -270,6 +273,35 @@ export class SftpFs implements RemoteFs {
       if (isLocalFsError(err, localPath)) throw localFailure(err, localPath);
       throw mapSftpError(err);
     }
+  }
+
+  async exec(command: string, signal: AbortSignal): Promise<ExecResult> {
+    const conn = this.conn;
+    if (!conn || this.isClosed) throw new TransferFailure('NOT_CONNECTED', 'La conexión SFTP está cerrada');
+    if (signal.aborted) throw new TransferFailure('CANCELLED', 'Cancelado');
+    this.log('command', `EXEC ${command}`);
+    return new Promise<ExecResult>((resolve, reject) => {
+      conn.exec(command, (err, channel) => {
+        if (err) {
+          reject(mapSshError(err));
+          return;
+        }
+        let stdout = '';
+        let stderr = '';
+        let code: number | null = null;
+        const append = (current: string, chunk: Buffer) => (current.length < EXEC_OUTPUT_MAX ? current + chunk.toString('utf8') : current);
+        const onAbort = () => channel.close();
+        signal.addEventListener('abort', onAbort, { once: true });
+        channel.on('data', (chunk: Buffer) => (stdout = append(stdout, chunk)));
+        channel.stderr.on('data', (chunk: Buffer) => (stderr = append(stderr, chunk)));
+        channel.on('exit', (exitCode: number | null) => (code = typeof exitCode === 'number' ? exitCode : null));
+        channel.on('close', () => {
+          signal.removeEventListener('abort', onAbort);
+          if (signal.aborted) reject(new TransferFailure('CANCELLED', 'Cancelado'));
+          else resolve({ code, stdout, stderr });
+        });
+      });
+    });
   }
 
   onLost(listener: (error: Error) => void): void {

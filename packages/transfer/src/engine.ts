@@ -7,10 +7,13 @@ import {
   type TransferEvents,
   type TransferMethod,
   type TransferResults,
+  type ArchivePhase,
   type TransferToMainMessage,
 } from '@vela-ftp/shared';
 import type { z } from 'zod';
 import { TransferFailure, toFailure } from './errors';
+import type { ArchiveContext } from './archive/common';
+import { compressArchive, extractArchive } from './archive/operations';
 import { FtpFs } from './fs/FtpFs';
 import type { RemoteFs, RemoteFsFactory } from './fs/RemoteFs';
 import { SftpFs } from './fs/SftpFs';
@@ -20,6 +23,8 @@ import { TransferQueue } from './queue';
 
 export const defaultFactory: RemoteFsFactory = (config: ConnectionConfig, log) =>
   config.protocol === 'sftp' ? new SftpFs(config, log) : new FtpFs(config, log);
+
+const ARCHIVE_PROGRESS_MS = 150;
 
 type Params<M extends TransferMethod> = z.output<(typeof TRANSFER_REQUEST_SCHEMAS)[M]>;
 /** `ports`: MessagePorts adjuntos al mensaje (solo los usa `terminal.open`). */
@@ -36,6 +41,8 @@ export class TransferEngine {
   private readonly pools = new Map<string, SessionPool>();
   private readonly terminals = new Map<string, SshTerminal>();
   private terminalCounter = 0;
+  /** Extracciones y compresiones en marcha, para poder cancelarlas. */
+  private readonly archiveOps = new Map<string, AbortController>();
   readonly queue: TransferQueue;
   private readonly factory: RemoteFsFactory;
   private readonly handlers: Handlers;
@@ -171,6 +178,12 @@ export class TransferEngine {
         }
         return null;
       },
+      'archive.extract': (params) => this.runArchive(params.opId, (ctx) => extractArchive(params, { withTransfer }, ctx)),
+      'archive.compress': (params) => this.runArchive(params.opId, (ctx) => compressArchive(params, { withTransfer }, ctx)),
+      'archive.cancel': async ({ opId }) => {
+        this.archiveOps.get(opId)?.abort();
+        return null;
+      },
       'queue.enqueue': async ({ jobs }) => {
         this.queue.enqueue(jobs);
         return null;
@@ -196,6 +209,30 @@ export class TransferEngine {
 
   private emit<E extends TransferEventName>(name: E, payload: TransferEvents[E]): void {
     this.options.send({ kind: 'event', name, payload });
+  }
+
+  /** Ejecuta una operación de archivo cancelable, con el progreso a lo sumo cada 150 ms. */
+  private async runArchive<T>(opId: string, fn: (ctx: ArchiveContext) => Promise<T>): Promise<T> {
+    if (this.archiveOps.has(opId)) throw new TransferFailure('PROTOCOL', `Operación repetida: ${opId}`);
+    const controller = new AbortController();
+    this.archiveOps.set(opId, controller);
+    let lastPhase: ArchivePhase | null = null;
+    let lastAt = 0;
+    const ctx: ArchiveContext = {
+      signal: controller.signal,
+      progress: (phase, done, total) => {
+        const now = Date.now();
+        if (phase === lastPhase && now - lastAt < ARCHIVE_PROGRESS_MS && done !== total) return;
+        lastPhase = phase;
+        lastAt = now;
+        this.emit('archive.progress', { opId, phase, done, total });
+      },
+    };
+    try {
+      return await fn(ctx);
+    } finally {
+      this.archiveOps.delete(opId);
+    }
   }
 
   private closeTerminals(sessionId: string): void {
@@ -230,6 +267,7 @@ export class TransferEngine {
   }
 
   dispose(): void {
+    for (const controller of this.archiveOps.values()) controller.abort();
     this.queue.dispose();
     for (const terminal of [...this.terminals.values()]) terminal.close();
     for (const p of this.pools.values()) p.close();

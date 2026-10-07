@@ -12,6 +12,7 @@ import { call, describeError, errorText } from './lib/ipc';
 import { localPaths, remotePaths } from './lib/paths';
 import { localPaneKey, remotePaneKey, usePanesStore, type PaneKey } from './stores/panesStore';
 import { useQueueStore } from './stores/queueStore';
+import { useArchiveStore } from './stores/archiveStore';
 import { useSessionsStore } from './stores/sessionsStore';
 import { useSitesStore } from './stores/sitesStore';
 import { useUiStore } from './stores/uiStore';
@@ -221,6 +222,7 @@ export function App() {
       window.api.on(IPC_EVENTS.QUEUE_UPDATED, ({ jobs, removedIds }) => queue.applyUpdate(jobs, removedIds)),
       window.api.on(IPC_EVENTS.QUEUE_CONFLICT, (info) => queue.addConflict(info)),
       window.api.on(IPC_EVENTS.PROTOCOL_LOG, (lines) => queue.appendLog(lines)),
+      window.api.on(IPC_EVENTS.ARCHIVE_PROGRESS, (progress) => useArchiveStore.getState().progress(progress)),
       window.api.on(IPC_EVENTS.SESSION_LOST, ({ sessionId, error }) => {
         const session = useSessionsStore.getState().sessions.find((s) => s.sessionId === sessionId);
         if (!session) return;
