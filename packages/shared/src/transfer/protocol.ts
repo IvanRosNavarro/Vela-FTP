@@ -89,6 +89,8 @@ export const TRANSFER_REQUEST_SCHEMAS = {
     jobId: z.string(),
     decision: z.enum(['overwrite', 'overwrite-if-newer', 'resume', 'rename', 'skip']),
     applyToAll: z.boolean(),
+    /** Sesiones a las que alcanza "aplicar a todos"; sin ella, a todas. */
+    sessionIds: z.array(z.string()).optional(),
   }),
 } as const;
 

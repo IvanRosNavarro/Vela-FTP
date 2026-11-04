@@ -57,10 +57,11 @@ function UpdateBadge() {
 /** Lo que hay en marcha, sin tener que abrir el panel de la cola. */
 function QueueSummary() {
   const jobs = useQueueStore((s) => s.jobs);
+  const version = useQueueStore((s) => s.version);
   const toggleBottomPanel = useUiStore((s) => s.toggleBottomPanel);
 
   const { active, speed, percent } = useMemo(() => {
-    const list = Object.values(jobs).filter((job) => ACTIVE_STATUSES.has(job.status));
+    const list = [...jobs.values()].filter((job) => ACTIVE_STATUSES.has(job.status));
     const total = list.reduce((n, job) => n + (job.size ?? 0), 0);
     const done = list.reduce((n, job) => n + job.transferred, 0);
     return {
@@ -68,7 +69,8 @@ function QueueSummary() {
       speed: list.reduce((n, job) => n + job.speed, 0),
       percent: total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0,
     };
-  }, [jobs]);
+    // `jobs` cambia en el sitio: manda `version`.
+  }, [jobs, version]);
 
   if (active === 0) return null;
 

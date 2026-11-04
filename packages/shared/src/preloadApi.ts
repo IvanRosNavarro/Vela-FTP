@@ -191,7 +191,10 @@ export interface QueueApi {
   retry(jobIds: string[]): Promise<AppResponse<null>>;
   remove(jobIds: string[]): Promise<AppResponse<null>>;
   resolveConflict(jobId: string, decision: ConflictDecision, applyToAll: boolean): Promise<AppResponse<null>>;
+  /** Trabajos de esta ventana. */
   snapshot(): Promise<AppResponse<JobSnapshot[]>>;
+  /** Transferencias en marcha en todas las ventanas. */
+  activeCount(): Promise<AppResponse<number>>;
   /** Reencola en `sessionId`, reanudando, trabajos recuperados al abrir la app. Devuelve los ids nuevos. */
   resume(sessionId: string, jobIds: string[]): Promise<AppResponse<string[]>>;
 }

@@ -17,6 +17,11 @@ export function forgetSession(sessionId: string): void {
   owners.delete(sessionId);
 }
 
+/** Ventana que abrió una sesión, o `null` si ya se cerró. */
+export function windowOfSession(sessionId: string): number | null {
+  return owners.get(sessionId) ?? null;
+}
+
 export function sessionsOfWindow(windowId: number): string[] {
   return [...owners.entries()].filter(([, id]) => id === windowId).map(([sessionId]) => sessionId);
 }

@@ -6,8 +6,10 @@ import {
   type ConflictInfo,
   type ConflictPolicy,
   type JobSnapshot,
+  type RemoteEntry,
   type TransferJob,
 } from '@vela-ftp/shared';
+import { RemoteDirCache } from './dirCache';
 import { TransferFailure, localFailure, toFailure } from './errors';
 import { basenameRemote, joinRemote, parentRemote, type RemoteFs } from './fs/RemoteFs';
 import { isBrokenConnection, type SessionPool } from './pool';
@@ -59,15 +61,26 @@ async function localInfo(file: string): Promise<(FileInfo & { isDirectory: boole
 
 export class TransferQueue {
   private readonly jobs = new Map<string, JobState>();
+  /**
+   * Índices de los pendientes y los activos, al día en `touch`. Los terminados
+   * siguen en `jobs`: recorrerlos todos en cada `pump` colgaba el motor con
+   * decenas de miles de trabajos.
+   */
+  private readonly queuedBySession = new Map<string, Set<string>>();
+  private readonly runningBySession = new Map<string, Set<string>>();
   private readonly dirty = new Set<string>();
   private readonly removed = new Set<string>();
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
-  /** "Aplicar a todos" en el diálogo de conflicto. */
+  /** "Aplicar a todos" en el diálogo de conflicto, para toda la cola. */
   private conflictOverride: ConflictDecision | null = null;
+  /** "Aplicar a todos" limitado a unas sesiones (las de una ventana). */
+  private readonly sessionOverrides = new Map<string, ConflictDecision>();
   private readonly now: () => number;
+  private readonly dirCache: RemoteDirCache;
 
   constructor(private readonly deps: QueueDeps) {
     this.now = deps.now ?? Date.now;
+    this.dirCache = new RemoteDirCache(() => this.now());
   }
 
   snapshot(): JobSnapshot[] {
@@ -75,6 +88,10 @@ export class TransferQueue {
   }
 
   enqueue(jobs: TransferJob[]): void {
+    // Lo que pide el usuario mira el servidor de nuevo; los hijos de una carpeta, no.
+    for (const sessionId of new Set(jobs.filter((j) => j.parentId === null).map((j) => j.sessionId))) {
+      this.dirCache.dropSession(sessionId);
+    }
     for (const job of jobs) {
       if (this.jobs.has(job.id)) continue;
       this.jobs.set(job.id, {
@@ -117,9 +134,11 @@ export class TransferQueue {
   }
 
   retry(ids: string[]): void {
+    const sessions = new Set<string>();
     for (const id of ids) {
       const state = this.jobs.get(id);
       if (!state || !['failed', 'cancelled', 'interrupted', 'skipped'].includes(state.snap.status)) continue;
+      sessions.add(state.snap.sessionId);
       state.snap.status = 'queued';
       state.snap.error = null;
       state.snap.attempts = 0;
@@ -127,6 +146,7 @@ export class TransferQueue {
       state.decision = null;
       this.touch(id);
     }
+    for (const sessionId of sessions) this.dirCache.dropSession(sessionId);
     this.pump();
   }
 
@@ -136,6 +156,7 @@ export class TransferQueue {
     for (const id of ids) {
       const state = this.jobs.get(id);
       if (!state || state.snap.status === 'running') continue;
+      this.index(id, state.snap.sessionId, null);
       this.jobs.delete(id);
       this.dirty.delete(id);
       this.removed.add(id);
@@ -143,12 +164,16 @@ export class TransferQueue {
     this.scheduleFlush();
   }
 
-  resolveConflict(id: string, decision: ConflictDecision, applyToAll: boolean): void {
+  resolveConflict(id: string, decision: ConflictDecision, applyToAll: boolean, sessionIds?: string[]): void {
     const state = this.jobs.get(id);
     if (applyToAll) {
-      this.conflictOverride = decision;
+      const scope = sessionIds ? new Set(sessionIds) : null;
+      if (scope && state) scope.add(state.snap.sessionId);
+      if (scope) for (const sessionId of scope) this.sessionOverrides.set(sessionId, decision);
+      else this.conflictOverride = decision;
       for (const other of this.jobs.values()) {
-        if (other.snap.status === 'conflict') this.requeueWithDecision(other, decision);
+        if (other.snap.status !== 'conflict') continue;
+        if (!scope || scope.has(other.snap.sessionId)) this.requeueWithDecision(other, decision);
       }
     }
     if (state?.snap.status === 'conflict') this.requeueWithDecision(state, decision);
@@ -157,12 +182,20 @@ export class TransferQueue {
 
   private requeueWithDecision(state: JobState, decision: ConflictDecision): void {
     state.decision = decision;
+    // Saltar no necesita volver a mirar el destino: se resuelve aquí mismo, sin
+    // que cada trabajo vuelva a pasar por la cola y por una conexión.
+    if (decision === 'skip') {
+      this.finish(state, 'skipped');
+      return;
+    }
     state.snap.status = 'queued';
     this.touch(state.snap.id);
   }
 
   /** La sesión se cerró: lo pendiente queda interrumpido y se puede reintentar. */
   interruptSession(sessionId: string): void {
+    this.sessionOverrides.delete(sessionId);
+    this.dirCache.dropSession(sessionId);
     for (const state of this.jobs.values()) {
       if (state.snap.sessionId !== sessionId || FINISHED.has(state.snap.status)) continue;
       if (state.retryTimer) clearTimeout(state.retryTimer);
@@ -171,27 +204,35 @@ export class TransferQueue {
     }
   }
 
-  private runningFor(sessionId: string): number {
-    let n = 0;
-    for (const s of this.jobs.values()) if (s.snap.sessionId === sessionId && s.snap.status === 'running') n++;
-    return n;
-  }
-
   private pump(): void {
-    for (const state of this.jobs.values()) {
-      if (state.snap.status !== 'queued' || state.retryTimer) continue;
-      const pool = this.deps.getPool(state.snap.sessionId);
+    // Por sesión y solo hasta llenar sus conexiones: con decenas de miles de
+    // trabajos, recorrer la cola entera en cada vuelta colgaba el motor.
+    for (const [sessionId, queued] of [...this.queuedBySession]) {
+      const pool = this.deps.getPool(sessionId);
       if (!pool) {
-        this.fail(state, new TransferFailure('NOT_CONNECTED', 'La sesión no está abierta'));
+        for (const id of [...queued]) {
+          const state = this.jobs.get(id);
+          if (state && !state.retryTimer) this.fail(state, new TransferFailure('NOT_CONNECTED', 'La sesión no está abierta'));
+        }
         continue;
       }
-      if (this.runningFor(state.snap.sessionId) >= pool.maxTransferConnections) continue;
-      state.snap.status = 'running';
-      state.snap.attempts++;
-      state.snap.startedAt ??= this.now();
-      state.controller = new AbortController();
-      this.touch(state.snap.id);
-      void this.run(state, pool);
+      let free = pool.maxTransferConnections - (this.runningBySession.get(sessionId)?.size ?? 0);
+      if (free <= 0) continue;
+      const start: JobState[] = [];
+      for (const id of queued) {
+        const state = this.jobs.get(id);
+        if (!state || state.retryTimer) continue;
+        start.push(state);
+        if (--free === 0) break;
+      }
+      for (const state of start) {
+        state.snap.status = 'running';
+        state.snap.attempts++;
+        state.snap.startedAt ??= this.now();
+        state.controller = new AbortController();
+        this.touch(state.snap.id);
+        void this.run(state, pool);
+      }
     }
   }
 
@@ -250,7 +291,7 @@ export class TransferQueue {
     if (state.decision) return state.decision;
     const policy: ConflictPolicy = state.snap.conflictPolicy;
     if (policy !== 'ask') return policy;
-    return this.conflictOverride;
+    return this.sessionOverrides.get(state.snap.sessionId) ?? this.conflictOverride;
   }
 
   /**
@@ -313,7 +354,7 @@ export class TransferQueue {
 
   private async download(state: JobState, fs: RemoteFs): Promise<void> {
     const { snap } = state;
-    const remote = await fs.stat(snap.remotePath);
+    const remote = await this.dirCache.stat(snap.sessionId, fs, snap.remotePath);
     if (!remote) throw new TransferFailure('NOT_FOUND', `No existe en el servidor: ${snap.remotePath}`);
     snap.size = remote.size;
     try {
@@ -353,13 +394,13 @@ export class TransferQueue {
     const local = await localInfo(snap.localPath);
     if (!local) throw new TransferFailure('NOT_FOUND', `No existe el fichero local: ${snap.localPath}`, { local: true });
     snap.size = local.size;
-    const remote = await fs.stat(snap.remotePath);
+    const remote = await this.dirCache.stat(snap.sessionId, fs, snap.remotePath);
     const offset = await this.applyPolicy(state, local, remote, async () => {
       const dir = parentRemote(snap.remotePath);
       const name = basenameRemote(snap.remotePath);
       for (let n = 1; ; n++) {
         const candidate = joinRemote(dir, numberedName(name, n));
-        if (!(await fs.stat(candidate))) {
+        if (!(await this.dirCache.stat(snap.sessionId, fs, candidate))) {
           snap.remotePath = candidate;
           return;
         }
@@ -378,6 +419,7 @@ export class TransferQueue {
         if (isBrokenConnection(err)) throw err;
       });
     }
+    this.dirCache.put(snap.sessionId, remoteFile(snap.remotePath, local.size, local.modifiedAt));
     this.finish(state, 'done');
   }
 
@@ -405,7 +447,10 @@ export class TransferQueue {
         } catch (err) {
           throw localFailure(err, localDir);
         }
-        for (const entry of await fs.list(remoteDir)) {
+        const entries = await fs.list(remoteDir);
+        // Las descargas de estos ficheros consultan el listado sin volver a pedirlo.
+        this.dirCache.seed(snap.sessionId, remoteDir, entries);
+        for (const entry of entries) {
           const localPath = path.join(localDir, entry.name);
           if (entry.type === 'dir') await walk(entry.path, localPath);
           else children.push(child(localPath, entry.path));
@@ -422,8 +467,13 @@ export class TransferQueue {
         } catch (err) {
           throw localFailure(err, localDir);
         }
-        const existing = await fs.stat(remoteDir);
-        if (!existing) await fs.mkdir(remoteDir);
+        const existing = await this.dirCache.stat(snap.sessionId, fs, remoteDir);
+        if (!existing) {
+          await fs.mkdir(remoteDir);
+          this.dirCache.put(snap.sessionId, { ...remoteFile(remoteDir, 0, null), type: 'dir' });
+          // Recién creada: está vacía, no hace falta listarla para cada fichero.
+          this.dirCache.seed(snap.sessionId, remoteDir, []);
+        }
         for (const entry of entries) {
           const localPath = path.join(localDir, entry.name);
           const remotePath = joinRemote(remoteDir, entry.name);
@@ -440,6 +490,8 @@ export class TransferQueue {
   }
 
   private touch(id: string): void {
+    const snap = this.jobs.get(id)?.snap;
+    if (snap) this.index(id, snap.sessionId, snap.status);
     this.dirty.add(id);
     this.scheduleFlush();
   }
@@ -447,6 +499,22 @@ export class TransferQueue {
   private scheduleFlush(): void {
     if (this.flushTimer) return;
     this.flushTimer = setTimeout(() => this.flush(), FLUSH_INTERVAL_MS);
+  }
+
+  /** Pone al día los índices de pendientes y activos; `null` lo saca de ambos. */
+  private index(id: string, session: string, status: JobSnapshot['status'] | null): void {
+    const update = (map: Map<string, Set<string>>, inIt: boolean) => {
+      let set = map.get(session);
+      if (inIt) {
+        if (!set) map.set(session, (set = new Set()));
+        set.add(id);
+      } else if (set) {
+        set.delete(id);
+        if (set.size === 0) map.delete(session);
+      }
+    };
+    update(this.queuedBySession, status === 'queued');
+    update(this.runningBySession, status === 'running');
   }
 
   /** Envía los cambios acumulados. Público para los tests. */
@@ -482,4 +550,8 @@ export class TransferQueue {
       state.controller?.abort();
     }
   }
+}
+
+function remoteFile(remotePath: string, size: number, modifiedAt: number | null): RemoteEntry {
+  return { name: basenameRemote(remotePath), path: remotePath, type: 'file', size, modifiedAt, mode: null, owner: null, group: null, target: null };
 }

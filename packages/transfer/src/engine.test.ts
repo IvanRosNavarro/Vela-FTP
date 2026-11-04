@@ -182,6 +182,27 @@ describe('TransferEngine', () => {
     expect(await readFile(path.join(local, 'ask2.txt'), 'utf8')).toBe('dos');
   });
 
+  it('"aplicar a todos" limitado a unas sesiones no toca los conflictos de otras', async () => {
+    await h.engine.call('session.open', {
+      sessionId: 's2',
+      maxTransferConnections: 1,
+      config: { protocol: 'ftp', host: '127.0.0.1', port: srv.port, username: USER, auth: 'password', password: PASS, trustedFingerprints: [] },
+    });
+    await writeFile(path.join(root, 'scope1.txt'), 'uno');
+    await writeFile(path.join(root, 'scope2.txt'), 'dos');
+    await writeFile(path.join(local, 'scope1.txt'), 'x');
+    await writeFile(path.join(local, 'scope2.txt'), 'y');
+    const j1 = job({ direction: 'download', localPath: path.join(local, 'scope1.txt'), remotePath: '/scope1.txt', conflictPolicy: 'ask' });
+    const j2 = job({ sessionId: 's2', direction: 'download', localPath: path.join(local, 'scope2.txt'), remotePath: '/scope2.txt', conflictPolicy: 'ask' });
+    h.engine.queue.enqueue([j1, j2]);
+    await h.waitFor(() => h.jobs.get(j1.id)?.status === 'conflict' && h.jobs.get(j2.id)?.status === 'conflict');
+
+    await h.engine.call('queue.resolveConflict', { jobId: j1.id, decision: 'overwrite', applyToAll: true, sessionIds: ['s1'] });
+    await h.waitFor(finished(j1.id));
+    expect(h.jobs.get(j2.id)?.status).toBe('conflict');
+    expect(await readFile(path.join(local, 'scope2.txt'), 'utf8')).toBe('y');
+  });
+
   it('falla sin reintentar si el origen no existe y permite reintentar a mano', async () => {
     const missing = job({ direction: 'download', localPath: path.join(local, 'm.txt'), remotePath: '/missing.txt' });
     h.engine.queue.enqueue([missing]);
@@ -193,6 +214,134 @@ describe('TransferEngine', () => {
     await h.waitFor(finished(missing.id));
     expect(h.jobs.get(missing.id)?.status).toBe('done');
     expect((await stat(path.join(local, 'm.txt'))).size).toBe(Buffer.byteLength('ya está'));
+  });
+
+  it('despacha una cola de decenas de miles de trabajos sin colgarse', async () => {
+    const done = new Set<string>();
+    const engine = new TransferEngine({
+      send: (msg) => {
+        if (msg.kind !== 'event' || msg.name !== 'queue.updated') return;
+        for (const j of (msg.payload as { jobs: JobSnapshot[] }).jobs) {
+          if (['done', 'skipped', 'failed', 'cancelled'].includes(j.status)) done.add(j.id);
+        }
+      },
+      factory: (): RemoteFs => ({
+        protocol: 'ftp',
+        closed: false,
+        connect: async () => undefined,
+        home: async () => '/',
+        list: async () => [],
+        stat: async () => null,
+        mkdir: async () => undefined,
+        rename: async () => undefined,
+        deleteFile: async () => undefined,
+        deleteDir: async () => undefined,
+        chmod: async () => undefined,
+        setModifiedTime: async () => false,
+        realpath: async (p) => p,
+        download: async () => undefined,
+        upload: async () => undefined,
+        onLost: () => undefined,
+        close: () => undefined,
+      }),
+    });
+    try {
+      await engine.call('session.open', {
+        sessionId: 's1',
+        maxTransferConnections: 2,
+        config: { protocol: 'ftp', host: 'x', port: 21, username: 'u', auth: 'anonymous', trustedFingerprints: [] },
+      });
+      await writeFile(path.join(local, 'carga.txt'), 'x');
+      const many = Array.from({ length: 30_000 }, (_, i) =>
+        job({ direction: 'upload', localPath: path.join(local, 'carga.txt'), remotePath: `/carga/${i}.txt` }),
+      );
+      engine.queue.enqueue(many);
+      const start = Date.now();
+      while (done.size < many.length) {
+        if (Date.now() - start > 30_000) throw new Error(`solo ${done.size} de ${many.length} terminados`);
+        await new Promise((r) => setTimeout(r, 20));
+        engine.queue.flush();
+      }
+    } finally {
+      engine.dispose();
+    }
+  }, 40_000);
+
+  it('sube una carpeta grande listando cada carpeta una vez y salta los conflictos al momento', async () => {
+    const seen = new Map<string, JobSnapshot['status'][]>();
+    const conflicts: ConflictInfo[] = [];
+    // Servidor FTP falso: la mitad de los ficheros ya existe en el destino.
+    const remote = new Map<string, number>();
+    const lists: string[] = [];
+    const engine = new TransferEngine({
+      send: (msg) => {
+        if (msg.kind !== 'event') return;
+        if (msg.name === 'queue.conflict') conflicts.push(msg.payload as ConflictInfo);
+        if (msg.name !== 'queue.updated') return;
+        for (const j of (msg.payload as { jobs: JobSnapshot[] }).jobs) seen.set(j.id, [...(seen.get(j.id) ?? []), j.status]);
+      },
+      factory: (): RemoteFs => ({
+        protocol: 'ftp',
+        closed: false,
+        connect: async () => undefined,
+        home: async () => '/',
+        list: async (dir) => {
+          lists.push(dir);
+          if (dir === '/') return [{ name: 'dest', path: '/dest', type: 'dir' as const, size: 0, modifiedAt: null, mode: null, owner: null, group: null, target: null }];
+          return [...remote]
+            .filter(([p]) => p.startsWith(`${dir}/`) && !p.slice(dir.length + 1).includes('/'))
+            .map(([p, size]) => ({ name: p.slice(dir.length + 1), path: p, type: 'file' as const, size, modifiedAt: null, mode: null, owner: null, group: null, target: null }));
+        },
+        stat: async (p) => (p === '/dest' ? { name: 'dest', path: p, type: 'dir', size: 0, modifiedAt: null, mode: null, owner: null, group: null, target: null } : null),
+        mkdir: async () => undefined,
+        rename: async () => undefined,
+        deleteFile: async () => undefined,
+        deleteDir: async () => undefined,
+        chmod: async () => undefined,
+        setModifiedTime: async () => false,
+        realpath: async (p) => p,
+        download: async () => undefined,
+        upload: async (_l, r) => void remote.set(r, 1),
+        onLost: () => undefined,
+        close: () => undefined,
+      }),
+    });
+    try {
+      await engine.call('session.open', {
+        sessionId: 's1',
+        maxTransferConnections: 2,
+        config: { protocol: 'ftp', host: 'x', port: 21, username: 'u', auth: 'anonymous', trustedFingerprints: [] },
+      });
+      const dir = await mkdtemp(path.join(local, 'grande-'));
+      for (let i = 0; i < 200; i++) {
+        await writeFile(path.join(dir, `f${i}.txt`), 'x');
+        if (i % 2 === 0) remote.set(`/dest/f${i}.txt`, 1);
+      }
+      const folder = job({ direction: 'upload', localPath: dir, remotePath: '/dest', isDirectory: true, conflictPolicy: 'ask' });
+      engine.queue.enqueue([folder]);
+      const until = async (predicate: () => boolean) => {
+        const start = Date.now();
+        while (!predicate()) {
+          if (Date.now() - start > 8000) throw new Error('timeout');
+          await new Promise((r) => setTimeout(r, 10));
+          engine.queue.flush();
+        }
+      };
+      await until(() => conflicts.length > 0);
+      await engine.call('queue.resolveConflict', { jobId: conflicts[0]!.jobId, decision: 'skip', applyToAll: true, sessionIds: ['s1'] });
+      const children = () => [...seen].filter(([id]) => id.startsWith(`${folder.id}/`));
+      await until(() => children().length === 200 && children().every(([, s]) => ['done', 'skipped'].includes(s.at(-1)!)));
+
+      expect(children().filter(([, s]) => s.at(-1) === 'skipped')).toHaveLength(100);
+      // Un conflicto saltado no vuelve a la cola: pasa de "conflict" a "skipped".
+      for (const [, statuses] of children().filter(([, s]) => s.includes('conflict'))) {
+        expect(statuses.slice(statuses.indexOf('conflict') + 1)).toEqual(['skipped']);
+      }
+      // Un solo listado de la carpeta para 200 ficheros (antes, uno por fichero).
+      expect(lists.filter((d) => d === '/dest')).toHaveLength(1);
+    } finally {
+      engine.dispose();
+    }
   });
 
   it('cancela y quita trabajos', async () => {

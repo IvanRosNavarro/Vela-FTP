@@ -178,6 +178,7 @@ const api: PreloadApi = {
     remove: (jobIds) => invoke(C.QUEUE_REMOVE, { jobIds }),
     resolveConflict: (jobId, decision, applyToAll) => invoke(C.QUEUE_RESOLVE_CONFLICT, { jobId, decision, applyToAll }),
     snapshot: () => invoke(C.QUEUE_SNAPSHOT),
+    activeCount: () => invoke(C.QUEUE_ACTIVE_COUNT),
     resume: (sessionId, jobIds) => invoke(C.QUEUE_RESUME, { sessionId, jobIds }),
   },
 

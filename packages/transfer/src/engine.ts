@@ -200,8 +200,8 @@ export class TransferEngine {
         this.queue.remove(jobIds);
         return null;
       },
-      'queue.resolveConflict': async ({ jobId, decision, applyToAll }) => {
-        this.queue.resolveConflict(jobId, decision, applyToAll);
+      'queue.resolveConflict': async ({ jobId, decision, applyToAll, sessionIds }) => {
+        this.queue.resolveConflict(jobId, decision, applyToAll, sessionIds);
         return null;
       },
     };

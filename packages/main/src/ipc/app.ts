@@ -36,7 +36,7 @@ import { v7 as uuidv7 } from 'uuid';
 import type { SecretStore } from '../security/SecretStore';
 import { restoredSessionId } from '../storage/repositories/TransferJobsRepository';
 import type { SessionManager } from '../sessions/SessionManager';
-import { forgetSession, rememberSessionOwner } from '../sessions/windowSessions';
+import { forgetSession, rememberSessionOwner, sessionsOfWindow } from '../sessions/windowSessions';
 import type { KnownHostsRepository } from '../storage/repositories/KnownHostsRepository';
 import type { PathHistoryRepository } from '../storage/repositories/ProjectsRepository';
 import type { SitesRepository } from '../storage/repositories/SitesRepository';
@@ -304,8 +304,17 @@ export function registerAppHandlers(deps: AppIpcDeps): void {
     queue.removeRestored(restored.map((j) => j.id));
     return jobs.map((j) => j.id);
   });
-  handle(IPC_CHANNELS.QUEUE_RESOLVE_CONFLICT, resolveConflictInputSchema, (input) => transfer.request('queue.resolveConflict', input));
-  handle(IPC_CHANNELS.QUEUE_SNAPSHOT, null, () => queue.snapshot());
+  handle(IPC_CHANNELS.QUEUE_RESOLVE_CONFLICT, resolveConflictInputSchema, (input, event) => {
+    // "Aplicar a todos" vale solo para las conexiones de esta ventana.
+    const windowId = BrowserWindow.fromWebContents(event.sender)?.id;
+    const sessionIds = windowId === undefined ? [] : sessionsOfWindow(windowId);
+    return transfer.request('queue.resolveConflict', { ...input, sessionIds });
+  });
+  handle(IPC_CHANNELS.QUEUE_SNAPSHOT, null, (_input, event) => {
+    const windowId = BrowserWindow.fromWebContents(event.sender)?.id;
+    return windowId === undefined ? [] : queue.snapshot(windowId);
+  });
+  handle(IPC_CHANNELS.QUEUE_ACTIVE_COUNT, null, () => queue.activeCount());
 
   handle(IPC_CHANNELS.DIALOG_OPEN, openFileDialogInputSchema, async ({ title, directory }, event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
