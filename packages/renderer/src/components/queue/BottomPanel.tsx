@@ -5,6 +5,7 @@ import type { JobSnapshot, ProtocolLogLine } from '@vela-ftp/shared';
 import { toast } from 'vela-kit/ui';
 import { formatEta, formatSize, formatSpeed } from '../../lib/format';
 import { EXPORT_MODIFIER_LABEL } from '../../lib/gestures';
+import { queueAction, resumeInBatches } from '../../lib/queueBatches';
 import { call, describeError, errorText } from '../../lib/ipc';
 import { ACTIVE_STATUSES, FAILED_STATUSES, useQueueStore } from '../../stores/queueStore';
 import { useSessionsStore } from '../../stores/sessionsStore';
@@ -199,13 +200,16 @@ export function BottomPanel({ height }: { height: number }) {
     const bySite = new Map<string, string[]>();
     for (const id of ids) {
       const siteId = jobsById[id]?.sessionId.slice(RESTORED.length);
-      if (siteId) bySite.set(siteId, [...(bySite.get(siteId) ?? []), id]);
+      if (!siteId) continue;
+      const list = bySite.get(siteId);
+      if (list) list.push(id);
+      else bySite.set(siteId, [id]);
     }
     for (const [siteId, siteJobs] of bySite) {
       const sessionId = await useSessionsStore.getState().ensureSession(siteId);
       if (!sessionId) continue;
-      const created = await call(window.api.queue.resume(sessionId, siteJobs));
-      if (created.length > 0) toast(`Reanudando ${created.length} transferencias`, 'info');
+      const created = await resumeInBatches(sessionId, siteJobs);
+      if (created > 0) toast(`Reanudando ${created} transferencias`, 'info');
     }
   };
 
@@ -215,10 +219,11 @@ export function BottomPanel({ height }: { height: number }) {
       if (action === 'retry') {
         const restored = ids.filter((id) => jobsById[id]?.sessionId.startsWith(RESTORED));
         await resumeRestored(restored);
-        ids = ids.filter((id) => !restored.includes(id));
+        const skip = new Set(restored);
+        ids = ids.filter((id) => !skip.has(id));
         if (ids.length === 0) return;
       }
-      await call(window.api.queue[action](ids));
+      await queueAction(action, ids);
       if (action === 'remove') setSelected(new Set());
     } catch (err) {
       toast(errorText(err), 'error');

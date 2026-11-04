@@ -52,6 +52,12 @@ export function handle<S extends z.ZodType, T>(
   });
 }
 
+/** Envía un evento a una ventana concreta, si sigue abierta. */
+export function sendToWindow<E extends IpcEventName>(windowId: number, event: E, payload: MainEventPayloads[E]): void {
+  const win = BrowserWindow.fromId(windowId);
+  if (win && !win.isDestroyed()) win.webContents.send(event, payload);
+}
+
 /** Envía un evento a todas las ventanas de la app. */
 export function broadcast<E extends IpcEventName>(event: E, payload: MainEventPayloads[E]): void {
   for (const win of BrowserWindow.getAllWindows()) {

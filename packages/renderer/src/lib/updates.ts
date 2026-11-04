@@ -2,7 +2,6 @@ import type { UpdateStatus } from '@vela-ftp/shared';
 import { toast } from 'vela-kit/ui';
 import { call, errorText } from './ipc';
 import { confirmDialog, useDialogStore } from '../stores/dialogStore';
-import { ACTIVE_STATUSES, useQueueStore } from '../stores/queueStore';
 import { useUpdatesStore } from '../stores/updatesStore';
 
 export function openUpdatesSettings(): void {
@@ -26,7 +25,8 @@ export function downloadUpdate(status: UpdateStatus): void {
 
 /** Reinicia e instala; si hay transferencias en marcha, avisa antes. */
 export async function installUpdate(): Promise<void> {
-  const active = Object.values(useQueueStore.getState().jobs).filter((j) => ACTIVE_STATUSES.has(j.status)).length;
+  // Cuenta las de todas las ventanas: la instalación las corta todas.
+  const active = await call(window.api.queue.activeCount()).catch(() => 0);
   if (active > 0) {
     const ok = await confirmDialog({
       title: 'Instalar actualización',

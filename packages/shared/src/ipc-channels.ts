@@ -89,6 +89,7 @@ export const IPC_CHANNELS = {
   QUEUE_RESOLVE_CONFLICT: 'queue:resolve-conflict',
   QUEUE_SNAPSHOT: 'queue:snapshot',
   QUEUE_RESUME: 'queue:resume',
+  QUEUE_ACTIVE_COUNT: 'queue:active-count',
 
   DIALOG_OPEN: 'dialog:open',
 

@@ -3,6 +3,7 @@ import { toast } from 'vela-kit/ui';
 import { createProject } from '../components/SitesSidebar';
 import { addBookmarkFor } from './bookmarks';
 import { call, errorText } from './ipc';
+import { queueAction } from './queueBatches';
 import { useDialogStore } from '../stores/dialogStore';
 import { localPaneKey, remotePaneKey, usePanesStore, type PaneKey } from '../stores/panesStore';
 import { ACTIVE_STATUSES, FAILED_STATUSES, useQueueStore } from '../stores/queueStore';
@@ -102,8 +103,7 @@ export function runCommandAction(action: CommandAction): void {
         .filter((j) => wanted.has(j.status) && !j.sessionId.startsWith('restored:'))
         .map((j) => j.id);
       if (ids.length === 0) return;
-      const request = action === 'cancel-all' ? window.api.queue.cancel(ids) : window.api.queue.retry(ids);
-      void call(request).catch((err) => toast(errorText(err), 'error'));
+      void queueAction(action === 'cancel-all' ? 'cancel' : 'retry', ids).catch((err) => toast(errorText(err), 'error'));
       return;
     }
   }

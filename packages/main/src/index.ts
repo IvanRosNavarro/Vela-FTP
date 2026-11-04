@@ -22,12 +22,12 @@ import { TransferJobsRepository } from './storage/repositories/TransferJobsRepos
 import { QueueMirror } from './transfer/QueueMirror';
 import { TransferHost } from './transfer/TransferHost';
 import { createMainWindow, createShellWindow } from './window/mainWindow';
-import { closeSessionsOfWindow } from './sessions/windowSessions';
+import { closeSessionsOfWindow, windowOfSession } from './sessions/windowSessions';
 import { EditorManager } from './files/EditorManager';
 import { ExternalFilesManager } from './files/ExternalFilesManager';
 import { cleanTempRoot, createTempDir } from './files/tempFiles';
 import { WatchManager } from './files/WatchManager';
-import { broadcast } from './ipc/handle';
+import { broadcast, sendToWindow } from './ipc/handle';
 import { IPC_EVENTS } from '@vela-ftp/shared';
 import { registerFileHandlers } from './ipc/files';
 import { registerSyncHandlers } from './ipc/sync';
@@ -117,6 +117,9 @@ if (!app.requestSingleInstanceLock()) {
       transfer,
       repo: new TransferJobsRepository(db),
       siteIdForSession: (sessionId) => sessions.get(sessionId)?.siteId ?? null,
+      windowForSession: windowOfSession,
+      sendTo: sendToWindow,
+      broadcast,
     });
 
     registerSettingsHandlers(settings);
@@ -184,6 +187,7 @@ if (!app.requestSingleInstanceLock()) {
       const windowId = win.id;
       // Cada ventana lleva sus conexiones: al cerrarla se sueltan solo las suyas.
       win.on('closed', () => {
+        queue?.forgetWindow(windowId);
         if (sessions) void closeSessionsOfWindow(windowId, sessions);
       });
       return win;
