@@ -99,7 +99,7 @@ export function runCommandAction(action: CommandAction): void {
       const { jobs } = useQueueStore.getState();
       const wanted = action === 'cancel-all' ? ACTIVE_STATUSES : FAILED_STATUSES;
       // Los recuperados de otra ejecución se reintentan desde la pestaña de fallidas.
-      const ids = Object.values(jobs)
+      const ids = [...jobs.values()]
         .filter((j) => wanted.has(j.status) && !j.sessionId.startsWith('restored:'))
         .map((j) => j.id);
       if (ids.length === 0) return;

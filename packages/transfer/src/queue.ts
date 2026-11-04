@@ -6,8 +6,10 @@ import {
   type ConflictInfo,
   type ConflictPolicy,
   type JobSnapshot,
+  type RemoteEntry,
   type TransferJob,
 } from '@vela-ftp/shared';
+import { RemoteDirCache } from './dirCache';
 import { TransferFailure, localFailure, toFailure } from './errors';
 import { basenameRemote, joinRemote, parentRemote, type RemoteFs } from './fs/RemoteFs';
 import { isBrokenConnection, type SessionPool } from './pool';
@@ -74,9 +76,11 @@ export class TransferQueue {
   /** "Aplicar a todos" limitado a unas sesiones (las de una ventana). */
   private readonly sessionOverrides = new Map<string, ConflictDecision>();
   private readonly now: () => number;
+  private readonly dirCache: RemoteDirCache;
 
   constructor(private readonly deps: QueueDeps) {
     this.now = deps.now ?? Date.now;
+    this.dirCache = new RemoteDirCache(() => this.now());
   }
 
   snapshot(): JobSnapshot[] {
@@ -84,6 +88,10 @@ export class TransferQueue {
   }
 
   enqueue(jobs: TransferJob[]): void {
+    // Lo que pide el usuario mira el servidor de nuevo; los hijos de una carpeta, no.
+    for (const sessionId of new Set(jobs.filter((j) => j.parentId === null).map((j) => j.sessionId))) {
+      this.dirCache.dropSession(sessionId);
+    }
     for (const job of jobs) {
       if (this.jobs.has(job.id)) continue;
       this.jobs.set(job.id, {
@@ -126,9 +134,11 @@ export class TransferQueue {
   }
 
   retry(ids: string[]): void {
+    const sessions = new Set<string>();
     for (const id of ids) {
       const state = this.jobs.get(id);
       if (!state || !['failed', 'cancelled', 'interrupted', 'skipped'].includes(state.snap.status)) continue;
+      sessions.add(state.snap.sessionId);
       state.snap.status = 'queued';
       state.snap.error = null;
       state.snap.attempts = 0;
@@ -136,6 +146,7 @@ export class TransferQueue {
       state.decision = null;
       this.touch(id);
     }
+    for (const sessionId of sessions) this.dirCache.dropSession(sessionId);
     this.pump();
   }
 
@@ -171,6 +182,12 @@ export class TransferQueue {
 
   private requeueWithDecision(state: JobState, decision: ConflictDecision): void {
     state.decision = decision;
+    // Saltar no necesita volver a mirar el destino: se resuelve aquí mismo, sin
+    // que cada trabajo vuelva a pasar por la cola y por una conexión.
+    if (decision === 'skip') {
+      this.finish(state, 'skipped');
+      return;
+    }
     state.snap.status = 'queued';
     this.touch(state.snap.id);
   }
@@ -178,6 +195,7 @@ export class TransferQueue {
   /** La sesión se cerró: lo pendiente queda interrumpido y se puede reintentar. */
   interruptSession(sessionId: string): void {
     this.sessionOverrides.delete(sessionId);
+    this.dirCache.dropSession(sessionId);
     for (const state of this.jobs.values()) {
       if (state.snap.sessionId !== sessionId || FINISHED.has(state.snap.status)) continue;
       if (state.retryTimer) clearTimeout(state.retryTimer);
@@ -336,7 +354,7 @@ export class TransferQueue {
 
   private async download(state: JobState, fs: RemoteFs): Promise<void> {
     const { snap } = state;
-    const remote = await fs.stat(snap.remotePath);
+    const remote = await this.dirCache.stat(snap.sessionId, fs, snap.remotePath);
     if (!remote) throw new TransferFailure('NOT_FOUND', `No existe en el servidor: ${snap.remotePath}`);
     snap.size = remote.size;
     try {
@@ -376,13 +394,13 @@ export class TransferQueue {
     const local = await localInfo(snap.localPath);
     if (!local) throw new TransferFailure('NOT_FOUND', `No existe el fichero local: ${snap.localPath}`, { local: true });
     snap.size = local.size;
-    const remote = await fs.stat(snap.remotePath);
+    const remote = await this.dirCache.stat(snap.sessionId, fs, snap.remotePath);
     const offset = await this.applyPolicy(state, local, remote, async () => {
       const dir = parentRemote(snap.remotePath);
       const name = basenameRemote(snap.remotePath);
       for (let n = 1; ; n++) {
         const candidate = joinRemote(dir, numberedName(name, n));
-        if (!(await fs.stat(candidate))) {
+        if (!(await this.dirCache.stat(snap.sessionId, fs, candidate))) {
           snap.remotePath = candidate;
           return;
         }
@@ -401,6 +419,7 @@ export class TransferQueue {
         if (isBrokenConnection(err)) throw err;
       });
     }
+    this.dirCache.put(snap.sessionId, remoteFile(snap.remotePath, local.size, local.modifiedAt));
     this.finish(state, 'done');
   }
 
@@ -428,7 +447,10 @@ export class TransferQueue {
         } catch (err) {
           throw localFailure(err, localDir);
         }
-        for (const entry of await fs.list(remoteDir)) {
+        const entries = await fs.list(remoteDir);
+        // Las descargas de estos ficheros consultan el listado sin volver a pedirlo.
+        this.dirCache.seed(snap.sessionId, remoteDir, entries);
+        for (const entry of entries) {
           const localPath = path.join(localDir, entry.name);
           if (entry.type === 'dir') await walk(entry.path, localPath);
           else children.push(child(localPath, entry.path));
@@ -445,8 +467,13 @@ export class TransferQueue {
         } catch (err) {
           throw localFailure(err, localDir);
         }
-        const existing = await fs.stat(remoteDir);
-        if (!existing) await fs.mkdir(remoteDir);
+        const existing = await this.dirCache.stat(snap.sessionId, fs, remoteDir);
+        if (!existing) {
+          await fs.mkdir(remoteDir);
+          this.dirCache.put(snap.sessionId, { ...remoteFile(remoteDir, 0, null), type: 'dir' });
+          // Recién creada: está vacía, no hace falta listarla para cada fichero.
+          this.dirCache.seed(snap.sessionId, remoteDir, []);
+        }
         for (const entry of entries) {
           const localPath = path.join(localDir, entry.name);
           const remotePath = joinRemote(remoteDir, entry.name);
@@ -523,4 +550,8 @@ export class TransferQueue {
       state.controller?.abort();
     }
   }
+}
+
+function remoteFile(remotePath: string, size: number, modifiedAt: number | null): RemoteEntry {
+  return { name: basenameRemote(remotePath), path: remotePath, type: 'file', size, modifiedAt, mode: null, owner: null, group: null, target: null };
 }

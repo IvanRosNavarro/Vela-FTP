@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useQueueStore } from '../../stores/queueStore';
 import { CompressDialog, ExtractDialog } from './ArchiveDialogs';
@@ -15,8 +16,10 @@ import { ChmodDialog, ConflictDialog } from './TransferDialogs';
 export function DialogHost() {
   const top = useDialogStore((s) => s.stack.at(-1));
   const close = useDialogStore((s) => s.close);
-  const conflicts = useQueueStore((s) => s.conflicts);
-  const jobs = useQueueStore((s) => s.jobs);
+  // Solo los conflictos aún abiertos: suscribirse a toda la cola repintaba esto
+  // con cada actualización de progreso. Los ya resueltos (p. ej. por "aplicar a
+  // todos") se descartan solos.
+  const pending = useQueueStore(useShallow((s) => s.conflicts.filter((c) => s.jobs.get(c.jobId)?.status === 'conflict')));
   const dropConflict = useQueueStore((s) => s.dropConflict);
 
   if (top) {
@@ -55,8 +58,6 @@ export function DialogHost() {
     }
   }
 
-  // Los conflictos ya resueltos (p. ej. por "aplicar a todos") se descartan solos.
-  const pending = conflicts.filter((c) => jobs[c.jobId]?.status === 'conflict');
   const first = pending[0];
   if (!first) return null;
   return <ConflictDialog key={first.jobId} info={first} remaining={pending.length} onClose={() => dropConflict(first.jobId)} />;

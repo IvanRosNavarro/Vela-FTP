@@ -4,7 +4,14 @@ import type { ConflictInfo, JobSnapshot, ProtocolLogLine } from '@vela-ftp/share
 const MAX_LOG_LINES = 5000;
 
 interface QueueState {
-  jobs: Record<string, JobSnapshot>;
+  /**
+   * Se actualiza en el sitio: copiar un objeto de decenas de miles de trabajos
+   * en cada aviso del motor (10 por segundo) bloqueaba la interfaz. Quien lo
+   * pinte debe suscribirse también a `version`.
+   */
+  jobs: ReadonlyMap<string, JobSnapshot>;
+  /** Sube con cada cambio de `jobs`. */
+  version: number;
   /** Orden de llegada. */
   order: string[];
   log: ProtocolLogLine[];
@@ -16,35 +23,38 @@ interface QueueState {
   clearLog(): void;
   addConflict(info: ConflictInfo): void;
   dropConflict(jobId: string): void;
+  clearConflicts(): void;
 }
 
 export const useQueueStore = create<QueueState>((set) => ({
-  jobs: {},
+  jobs: new Map(),
+  version: 0,
   order: [],
   log: [],
   conflicts: [],
   addConflict: (info) => set((s) => ({ conflicts: [...s.conflicts.filter((c) => c.jobId !== info.jobId), info] })),
   dropConflict: (jobId) => set((s) => ({ conflicts: s.conflicts.filter((c) => c.jobId !== jobId) })),
+  clearConflicts: () => set({ conflicts: [] }),
   applyUpdate(updates, removedIds) {
     set((s) => {
-      const jobs = { ...s.jobs };
+      const jobs = s.jobs as Map<string, JobSnapshot>;
       let order = s.order;
       const added: string[] = [];
       for (const job of updates) {
-        if (!jobs[job.id]) added.push(job.id);
-        jobs[job.id] = job;
+        if (!jobs.has(job.id)) added.push(job.id);
+        jobs.set(job.id, job);
       }
-      if (added.length > 0) order = [...order, ...added];
+      if (added.length > 0) order = order.concat(added);
       if (removedIds.length > 0) {
         const removed = new Set(removedIds);
-        for (const id of removedIds) delete jobs[id];
+        for (const id of removedIds) jobs.delete(id);
         order = order.filter((id) => !removed.has(id));
       }
-      return { jobs, order };
+      return { order, version: s.version + 1 };
     });
   },
   replaceAll(list) {
-    set({ jobs: Object.fromEntries(list.map((j) => [j.id, j])), order: list.map((j) => j.id) });
+    set((s) => ({ jobs: new Map(list.map((j) => [j.id, j])), order: list.map((j) => j.id), version: s.version + 1 }));
   },
   appendLog(lines) {
     set((s) => {

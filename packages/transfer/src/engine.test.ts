@@ -267,6 +267,83 @@ describe('TransferEngine', () => {
     }
   }, 40_000);
 
+  it('sube una carpeta grande listando cada carpeta una vez y salta los conflictos al momento', async () => {
+    const seen = new Map<string, JobSnapshot['status'][]>();
+    const conflicts: ConflictInfo[] = [];
+    // Servidor FTP falso: la mitad de los ficheros ya existe en el destino.
+    const remote = new Map<string, number>();
+    const lists: string[] = [];
+    const engine = new TransferEngine({
+      send: (msg) => {
+        if (msg.kind !== 'event') return;
+        if (msg.name === 'queue.conflict') conflicts.push(msg.payload as ConflictInfo);
+        if (msg.name !== 'queue.updated') return;
+        for (const j of (msg.payload as { jobs: JobSnapshot[] }).jobs) seen.set(j.id, [...(seen.get(j.id) ?? []), j.status]);
+      },
+      factory: (): RemoteFs => ({
+        protocol: 'ftp',
+        closed: false,
+        connect: async () => undefined,
+        home: async () => '/',
+        list: async (dir) => {
+          lists.push(dir);
+          if (dir === '/') return [{ name: 'dest', path: '/dest', type: 'dir' as const, size: 0, modifiedAt: null, mode: null, owner: null, group: null, target: null }];
+          return [...remote]
+            .filter(([p]) => p.startsWith(`${dir}/`) && !p.slice(dir.length + 1).includes('/'))
+            .map(([p, size]) => ({ name: p.slice(dir.length + 1), path: p, type: 'file' as const, size, modifiedAt: null, mode: null, owner: null, group: null, target: null }));
+        },
+        stat: async (p) => (p === '/dest' ? { name: 'dest', path: p, type: 'dir', size: 0, modifiedAt: null, mode: null, owner: null, group: null, target: null } : null),
+        mkdir: async () => undefined,
+        rename: async () => undefined,
+        deleteFile: async () => undefined,
+        deleteDir: async () => undefined,
+        chmod: async () => undefined,
+        setModifiedTime: async () => false,
+        realpath: async (p) => p,
+        download: async () => undefined,
+        upload: async (_l, r) => void remote.set(r, 1),
+        onLost: () => undefined,
+        close: () => undefined,
+      }),
+    });
+    try {
+      await engine.call('session.open', {
+        sessionId: 's1',
+        maxTransferConnections: 2,
+        config: { protocol: 'ftp', host: 'x', port: 21, username: 'u', auth: 'anonymous', trustedFingerprints: [] },
+      });
+      const dir = await mkdtemp(path.join(local, 'grande-'));
+      for (let i = 0; i < 200; i++) {
+        await writeFile(path.join(dir, `f${i}.txt`), 'x');
+        if (i % 2 === 0) remote.set(`/dest/f${i}.txt`, 1);
+      }
+      const folder = job({ direction: 'upload', localPath: dir, remotePath: '/dest', isDirectory: true, conflictPolicy: 'ask' });
+      engine.queue.enqueue([folder]);
+      const until = async (predicate: () => boolean) => {
+        const start = Date.now();
+        while (!predicate()) {
+          if (Date.now() - start > 8000) throw new Error('timeout');
+          await new Promise((r) => setTimeout(r, 10));
+          engine.queue.flush();
+        }
+      };
+      await until(() => conflicts.length > 0);
+      await engine.call('queue.resolveConflict', { jobId: conflicts[0]!.jobId, decision: 'skip', applyToAll: true, sessionIds: ['s1'] });
+      const children = () => [...seen].filter(([id]) => id.startsWith(`${folder.id}/`));
+      await until(() => children().length === 200 && children().every(([, s]) => ['done', 'skipped'].includes(s.at(-1)!)));
+
+      expect(children().filter(([, s]) => s.at(-1) === 'skipped')).toHaveLength(100);
+      // Un conflicto saltado no vuelve a la cola: pasa de "conflict" a "skipped".
+      for (const [, statuses] of children().filter(([, s]) => s.includes('conflict'))) {
+        expect(statuses.slice(statuses.indexOf('conflict') + 1)).toEqual(['skipped']);
+      }
+      // Un solo listado de la carpeta para 200 ficheros (antes, uno por fichero).
+      expect(lists.filter((d) => d === '/dest')).toHaveLength(1);
+    } finally {
+      engine.dispose();
+    }
+  });
+
   it('cancela y quita trabajos', async () => {
     // Adaptador falso: la subida no acaba hasta que se aborta, así la prueba no
     // depende de la velocidad del disco.

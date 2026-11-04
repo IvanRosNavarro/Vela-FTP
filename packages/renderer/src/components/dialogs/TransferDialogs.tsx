@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ConflictDecision, ConflictInfo } from '@vela-ftp/shared';
+import { useQueueStore } from '../../stores/queueStore';
 import { toast } from 'vela-kit/ui';
 import { formatDate, formatMode, formatSize } from '../../lib/format';
 import { call, errorText } from '../../lib/ipc';
@@ -23,6 +24,8 @@ export function ConflictDialog({ info, remaining, onClose }: { info: ConflictInf
   const submit = async (value: ConflictDecision) => {
     try {
       await call(window.api.queue.resolveConflict(info.jobId, value, applyToAll));
+      // El motor ya ha resuelto todos los de esta ventana: no se enseña uno tras otro.
+      if (applyToAll) useQueueStore.getState().clearConflicts();
     } catch (err) {
       toast(`No se pudo aplicar la decisión: ${errorText(err)}`, 'error');
     }
